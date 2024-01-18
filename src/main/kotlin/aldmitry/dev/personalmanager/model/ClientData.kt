@@ -25,6 +25,12 @@ open class ClientData {
     @Column(name = "patronymic")
     open var patronymic: String = ""
 
+    @Column(name = "phone_number")
+    open var phoneNumber: String = ""
+
+    @Column(name = "visit_agreement")
+    open var visitAgreement: String = "❔"
+
     @Column(name = "appointment_date")
     open var appointmentDate: String = ""
 

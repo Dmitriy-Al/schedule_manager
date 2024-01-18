@@ -11,6 +11,9 @@ open class User {
     @Column(name = "chat_id")
     open var chatId: Long = 0
 
+    @Column(name = "password")
+    open var password: String = ""
+
     @Column(name = "profession")
     open var profession: String = ""
 
@@ -27,12 +30,12 @@ open class User {
     open var sendTime: Int = 12
 
     @Column(name = "time_zone")
-    open var timeZone: Int = 0
+    open var timeZone: Long = 0
 
     @Column(name = "payment_date")
     open var paymentDate: String = ""
 
     @Column(name = "send_before_days")
-    open var sendBeforeDays: Int = 1
+    open var sendBeforeDays: Long = 1
 
 }

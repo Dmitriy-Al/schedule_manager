@@ -1,6 +1,7 @@
 package aldmitry.dev.personalmanager.service
 
 import aldmitry.dev.personalmanager.extendfunctions.putData
+import aldmitry.dev.personalmanager.model.User
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton
@@ -73,6 +74,7 @@ class BotMenuFunction : BotMenuInterface {
         return inlineKeyboardMarkup
     }
 
+
     fun receiveFindClientKeyboard(stringChatId: String, intMessageId: Int, messageText: String, callBackData: String): EditMessageText {
         val editMessageText = EditMessageText()
         editMessageText.putData(stringChatId, intMessageId, messageText)
@@ -122,7 +124,6 @@ class BotMenuFunction : BotMenuInterface {
         findAllButton.putData("Список всех клиентов", "#allcli$callBackData")
         fifthRowInlineButton.add(findAllButton)
 
-
         rowsInline.add(firstRowInlineButton)
         rowsInline.add(secondRowInlineButton)
         rowsInline.add(thirdRowInlineButton)
@@ -135,6 +136,76 @@ class BotMenuFunction : BotMenuInterface {
     }
 
 
+    fun receiveSettingsKeyboard(stringChatId: String, intMessageId: Int, user: User): EditMessageText {
+        val editMessageText = EditMessageText()
+
+        val textForMessage = "\uD83D\uDD30  Меню с настройками.\nДля настроек надо только....\n\n\uD83D\uDD38 Время рассылки в: ${user.sendTime} часов" +
+                "\n\uD83D\uDD38 Рассылка за: ${user.sendBeforeDays} день/дня до приёма\n\uD83D\uDD38 Часовой пояс от Мск. часов: ${user.timeZone}" +
+                "\n\uD83D\uDD38 ФИО: ${user.secondName} ${user.firstName} ${user.patronymic}\n\uD83D\uDD38 Специализация: ${user.profession}" +
+                "\n\uD83D\uDD38 Очередная абонентская плата: ${user.paymentDate.replace("-", ".")}"
+
+        editMessageText.putData(stringChatId, intMessageId, textForMessage)
+
+        val inlineKeyboardMarkup = InlineKeyboardMarkup()
+        val rowsInline = ArrayList<List<InlineKeyboardButton>>()
+        val firstRowInlineButton = ArrayList<InlineKeyboardButton>()
+        val secondRowInlineButton = ArrayList<InlineKeyboardButton>()
+        val thirdRowInlineButton = ArrayList<InlineKeyboardButton>()
+        val fourthRowInlineButton = ArrayList<InlineKeyboardButton>()
+        val fifthRowInlineButton = ArrayList<InlineKeyboardButton>()
+        val sixthRowInlineButton = ArrayList<InlineKeyboardButton>()
+
+        val sendTimeMinus = InlineKeyboardButton()
+        sendTimeMinus.putData("➖  Время рассылки", "#timedwn")
+        firstRowInlineButton.add(sendTimeMinus)
+
+        val sendTimePlus = InlineKeyboardButton()
+        sendTimePlus.putData("Время рассылки  ➕", "#timeup")
+        firstRowInlineButton.add(sendTimePlus)
+
+        val sendDayMinus = InlineKeyboardButton()
+        sendDayMinus.putData("➖  День рассылки", "#daydwn")
+        secondRowInlineButton.add(sendDayMinus)
+
+        val sendDayPlus = InlineKeyboardButton()
+        sendDayPlus.putData("День рассылки  ➕", "#dayup")
+        secondRowInlineButton.add(sendDayPlus)
+
+        val timeZoneMinus = InlineKeyboardButton()
+        timeZoneMinus.putData("➖  Часовой пояс", "#zonedwn")
+        thirdRowInlineButton.add(timeZoneMinus)
+
+        val timeZonePlus = InlineKeyboardButton()
+        timeZonePlus.putData("Часовой пояс  ➕", "#zoneup")
+        thirdRowInlineButton.add(timeZonePlus)
+
+        val changeDataButton = InlineKeyboardButton()
+        changeDataButton.putData("Мои данные", "#mydata")
+        fourthRowInlineButton.add(changeDataButton)
+
+        val paymentButton = InlineKeyboardButton()
+        paymentButton.putData("Оплатить абонемент", "#payment")
+        fifthRowInlineButton.add(paymentButton)
+
+        val sendButton = InlineKeyboardButton()
+        sendButton.putData("Чат поддержки", "#support")
+        fifthRowInlineButton.add(sendButton)
+
+        val backButton = InlineKeyboardButton()
+        backButton.putData("\uD83D\uDD19  Назад в меню", "\uD83D\uDD19  Назад в меню")
+        sixthRowInlineButton.add(backButton)
+
+        rowsInline.add(firstRowInlineButton)
+        rowsInline.add(secondRowInlineButton)
+        rowsInline.add(thirdRowInlineButton)
+        rowsInline.add(fourthRowInlineButton)
+        rowsInline.add(fifthRowInlineButton)
+        rowsInline.add(sixthRowInlineButton)
+        inlineKeyboardMarkup.keyboard = rowsInline
+        editMessageText.replyMarkup = inlineKeyboardMarkup
+
+        return editMessageText
+    }
 
 
 
