@@ -5,6 +5,8 @@ import aldmitry.dev.personalmanager.model.User
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 class BotMenuFunction : BotMenuInterface {
 
@@ -138,11 +140,11 @@ class BotMenuFunction : BotMenuInterface {
 
     fun receiveSettingsKeyboard(stringChatId: String, intMessageId: Int, user: User): EditMessageText {
         val editMessageText = EditMessageText()
-
+        val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
         val textForMessage = "\uD83D\uDD30  Меню с настройками.\nДля настроек надо только....\n\n\uD83D\uDD38 Время рассылки в: ${user.sendTime} часов" +
                 "\n\uD83D\uDD38 Рассылка за: ${user.sendBeforeDays} день/дня до приёма\n\uD83D\uDD38 Часовой пояс от Мск. часов: ${user.timeZone}" +
                 "\n\uD83D\uDD38 ФИО: ${user.secondName} ${user.firstName} ${user.patronymic}\n\uD83D\uDD38 Специализация: ${user.profession}" +
-                "\n\uD83D\uDD38 Очередная абонентская плата: ${user.paymentDate.replace("-", ".")}"
+                "\n\uD83D\uDD38 Очередная абонентская плата: ${formatter.format(LocalDate.parse(user.paymentDate))}"
 
         editMessageText.putData(stringChatId, intMessageId, textForMessage)
 
