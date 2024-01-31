@@ -42,7 +42,6 @@ class BotMenuFunction : BotMenuInterface {
         return inlineKeyboardMarkup
     }
 
-
     // Меню с одной кнопкой
     override fun receiveOneButtonMenu(buttonText: String, buttonData: String): InlineKeyboardMarkup {
         val inlineKeyboardMarkup = InlineKeyboardMarkup()
@@ -141,7 +140,15 @@ class BotMenuFunction : BotMenuInterface {
     fun receiveSettingsKeyboard(stringChatId: String, intMessageId: Int, user: User): EditMessageText {
         val editMessageText = EditMessageText()
         val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
-        val textForMessage = "\uD83D\uDD30  Меню с настройками.\nДля настроек надо только....\n\n\uD83D\uDD38 Время рассылки в: ${user.sendTime} часов" +
+        val textForMessage = "\uD83D\uDD30  Меню с настройками.\nВ меню настроек вашей учетной записи вы можете:\n" +
+                "✷ Установить время для рассылки сообщений, чтобы клиент мог подтвердить визит к вам. По умолчанию время рассылки 12.00 (Мск.)\n" +
+                "✷ Установить количество дней, за которое будут отправлены сообщения для подтверждения визита. По умолчанию сообщения отправляются за 1 " +
+                "день до приёма, возможный максимум - за 3 дня до приёма.\n✷ Если ваш часовой пояс не соответствует Мск., установите то количество часов, " +
+                "на которое ваше время отличается от дефолтного (Мск.)\n✷ В разделе <Мои клиенты и лимиты> можно узнать, сколько клиентов у вас " +
+                "добавлено в базу данных и сколько вы еще можете добавить.\n✷ В разделе <Мои данные> вы можете редактировать собственные данные, восстановить учётную запись " +
+                "в приложении, если у вас изменился Telegram аккаунт, посмотреть собственную запись к специалисту.\n✷ В случае возникновения проблем связанных " +
+                "с работой приложения, вы можете обратиться в чат поддержки.\n\n\uD83D\uDD39 С помощью клавиш ➖ и ➕ вы можете менять параметры настроек времени." +
+                "\n\n\uD83D\uDD38 Время рассылки в: ${user.sendTime} часов" +
                 "\n\uD83D\uDD38 Рассылка за: ${user.sendBeforeDays} день/дня до приёма\n\uD83D\uDD38 Часовой пояс от Мск. часов: ${user.timeZone}" +
                 "\n\uD83D\uDD38 ФИО: ${user.secondName} ${user.firstName} ${user.patronymic}\n\uD83D\uDD38 Специализация: ${user.profession}" +
                 "\n\uD83D\uDD38 Очередная абонентская плата: ${formatter.format(LocalDate.parse(user.paymentDate))}"
@@ -156,6 +163,7 @@ class BotMenuFunction : BotMenuInterface {
         val fourthRowInlineButton = ArrayList<InlineKeyboardButton>()
         val fifthRowInlineButton = ArrayList<InlineKeyboardButton>()
         val sixthRowInlineButton = ArrayList<InlineKeyboardButton>()
+        val seventhRowInlineButton = ArrayList<InlineKeyboardButton>()
 
         val sendTimeMinus = InlineKeyboardButton()
         sendTimeMinus.putData("➖  Время рассылки", "#timedwn")
@@ -181,21 +189,25 @@ class BotMenuFunction : BotMenuInterface {
         timeZonePlus.putData("Часовой пояс  ➕", "#zoneup")
         thirdRowInlineButton.add(timeZonePlus)
 
+        val clientButton = InlineKeyboardButton()
+        clientButton.putData("Мои клиенты и лимиты", "#mycli")
+        fourthRowInlineButton.add(clientButton)
+
         val changeDataButton = InlineKeyboardButton()
         changeDataButton.putData("Мои данные", "#mydata")
-        fourthRowInlineButton.add(changeDataButton)
+        fifthRowInlineButton.add(changeDataButton)
 
         val paymentButton = InlineKeyboardButton()
-        paymentButton.putData("Оплатить абонемент", "#payment")
-        fifthRowInlineButton.add(paymentButton)
+        paymentButton.putData("Абонемент", "#payment")
+        sixthRowInlineButton.add(paymentButton)
 
         val sendButton = InlineKeyboardButton()
         sendButton.putData("Чат поддержки", "#support")
-        fifthRowInlineButton.add(sendButton)
+        sixthRowInlineButton.add(sendButton)
 
         val backButton = InlineKeyboardButton()
         backButton.putData("\uD83D\uDD19  Назад в меню", "\uD83D\uDD19  Назад в меню")
-        sixthRowInlineButton.add(backButton)
+        seventhRowInlineButton.add(backButton)
 
         rowsInline.add(firstRowInlineButton)
         rowsInline.add(secondRowInlineButton)
@@ -203,6 +215,7 @@ class BotMenuFunction : BotMenuInterface {
         rowsInline.add(fourthRowInlineButton)
         rowsInline.add(fifthRowInlineButton)
         rowsInline.add(sixthRowInlineButton)
+        rowsInline.add(seventhRowInlineButton)
         inlineKeyboardMarkup.keyboard = rowsInline
         editMessageText.replyMarkup = inlineKeyboardMarkup
 

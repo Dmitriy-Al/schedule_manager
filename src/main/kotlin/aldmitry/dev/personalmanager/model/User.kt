@@ -11,6 +11,12 @@ open class User {
     @Column(name = "chat_id")
     open var chatId: Long = 0
 
+    @Column(name = "send_time")
+    open var sendTime: Int = 12
+
+    @Column(name = "time_zone")
+    open var timeZone: Long = 0
+
     @Column(name = "password")
     open var password: String = ""
 
@@ -26,16 +32,18 @@ open class User {
     @Column(name = "patronymic")
     open var patronymic: String = ""
 
-    @Column(name = "send_time")
-    open var sendTime: Int = 12
-
-    @Column(name = "time_zone")
-    open var timeZone: Long = 0
-
     @Column(name = "payment_date")
     open var paymentDate: String = ""
 
     @Column(name = "send_before_days")
     open var sendBeforeDays: Long = 1
+
+
+    override fun toString(): String {
+        return "<user chatId=\"$chatId\" password=\"$password\" firstName=\"$firstName\" secondName=\"$secondName\" " +
+                "patronymic=\"$patronymic\" profession=\"$profession\" sendTime=\"$sendTime\"" +
+                " timeZone=\"$timeZone\" paymentDate=\"$paymentDate\" sendBeforeDays=\"$sendBeforeDays\" />"
+    }
+
 
 }

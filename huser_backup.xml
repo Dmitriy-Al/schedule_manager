@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<users>
+<user chatId="1210909976" chatId="1210909976" password="" firstName="Оксана" secondName="Алимова" patronymic="Викторовна" profession="стоматолог" sendTime="12" timeZone="0" paymentDate="2024-04-20" sendBeforeDays="1" />
+<user chatId="20410242450" chatId="20410242450" password="" firstName="" secondName="" patronymic="" profession="" sendTime="12" timeZone="0" paymentDate="" sendBeforeDays="1" />
+<user chatId="2041024245" chatId="2041024245" password="1234567891111" firstName="Петр" secondName="Петечкин" patronymic="Петрович" profession="admin" sendTime="13" timeZone="0" paymentDate="2024-04-22" sendBeforeDays="1" />
+</users>

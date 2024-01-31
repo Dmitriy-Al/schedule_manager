@@ -13,9 +13,6 @@ open class ClientData {
     @Column(name = "chat_id")
     open var chatId: Long = 0
 
-    @Column(name = "specialist_id")
-    open var specialistId: Long = 0
-
     @Column(name = "first_name")
     open var firstName: String = ""
 
@@ -25,11 +22,11 @@ open class ClientData {
     @Column(name = "patronymic")
     open var patronymic: String = ""
 
-    @Column(name = "phone_number")
-    open var phoneNumber: String = ""
+    @Column(name = "specialist_id")
+    open var specialistId: Long = 0
 
     @Column(name = "visit_agreement")
-    open var visitAgreement: String = "❔"
+    open var visitAgreement: String = ""
 
     @Column(name = "appointment_date")
     open var appointmentDate: String = ""
@@ -40,6 +37,15 @@ open class ClientData {
     @Column(name = "remark", columnDefinition = "text")
     open var remark: String = ""
 
+    @Column(name = "visit_history", columnDefinition = "text")
+    open var visitHistory: String = ""
+
+
+    override fun toString(): String {
+        return "<client clientId=\"$clientId\" chatId=\"$chatId\" specialistId=\"$specialistId\" firstName=\"$firstName\" " +
+                "secondName=\"$secondName\" patronymic=\"$patronymic\" visitAgreement=\"$visitAgreement\" appointmentDate=" +
+                "\"$appointmentDate\" appointmentTime=\"$appointmentTime\" remark=\"$remark\" visitHistory=\"$visitHistory\" />"
+    }
 
 
 }

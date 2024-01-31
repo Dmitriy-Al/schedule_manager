@@ -1,5 +1,6 @@
 package aldmitry.dev.personalmanager.extendfunctions
 
+import org.telegram.telegrambots.meta.api.methods.send.SendDocument
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage
@@ -88,6 +89,17 @@ fun AbsSender.protectedExecute(editMessageMedia: EditMessageMedia) {
         this.execute(editMessageMedia)
     } catch (e: TelegramApiException) {
         // without logger: exceptions here is ordinary case, because there are often no messages to delete
+    }
+}
+
+
+fun AbsSender.protectedExecute(sendDocument: SendDocument) {
+    try {
+        this.execute(sendDocument)
+    } catch (e: TelegramApiException) {
+        //  val logger = LoggerFactory.getLogger("extendfunctions <protectedExecute SendDocument>")
+        // without logger: exceptions here is ordinary case, because there are often no messages to delete
+        println("Err >>>  $e")
     }
 }
 
