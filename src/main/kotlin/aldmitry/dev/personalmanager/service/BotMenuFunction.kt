@@ -1,6 +1,7 @@
 package aldmitry.dev.personalmanager.service
 
 import aldmitry.dev.personalmanager.extendfunctions.putData
+import aldmitry.dev.personalmanager.model.ClientData
 import aldmitry.dev.personalmanager.model.User
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
@@ -221,6 +222,92 @@ class BotMenuFunction : BotMenuInterface {
 
         return editMessageText
     }
+
+
+    fun receiveFindClientMenu(intMessageId: Int, stringChatId: String, longChatId: Long, secondNameText: String,
+                              calBackData: String, clients: Iterable<ClientData>): EditMessageText {
+
+        val client = clients.filter { it.specialistId == longChatId && it.secondName.contains(secondNameText,
+        true) }.filter { it.secondName.first().lowercase() == secondNameText.first().lowercase() }.sortedBy { it.secondName }
+
+        val textForMessage: String
+        val editMessageText = EditMessageText()
+
+        if(client.isEmpty()){
+            textForMessage = "ℹ  Клиента с таким сочетанием символов в фамилии не найдено."
+            editMessageText.replyMarkup = receiveOneButtonMenu("\uD83D\uDD19  Назад в меню",
+                    "\uD83D\uDD19  Назад в меню")
+
+        } else {
+            textForMessage = "\uD83D\uDD30 Выберите клиента/пациента из списка:"
+            val inlineKeyboardMarkup = InlineKeyboardMarkup()
+            val rowsInline = ArrayList<List<InlineKeyboardButton>>()
+            for (elem in client) {
+                val rowInlineButton = ArrayList<InlineKeyboardButton>()
+                val button = InlineKeyboardButton()
+                button.putData(elem.secondName + " " +  elem.firstName, calBackData + elem.clientId)
+                rowInlineButton.add(button)
+                rowsInline.add(rowInlineButton)
+            }
+
+            val rowInlineButton = ArrayList<InlineKeyboardButton>()
+            val returnButton = InlineKeyboardButton()
+            returnButton.putData("\uD83D\uDD19  Назад в меню", "\uD83D\uDD19  Назад в меню")
+            rowInlineButton.add(returnButton)
+            rowsInline.add(rowInlineButton)
+
+            inlineKeyboardMarkup.keyboard = rowsInline
+            editMessageText.replyMarkup = inlineKeyboardMarkup
+        }
+
+        editMessageText.putData(stringChatId, intMessageId, textForMessage)
+       return editMessageText
+    }
+
+
+
+
+/*
+    private fun sendFindClient(stringChatId: String, longChatId: Long, updateMessageText: String){
+        println("TEST 1") // TODO
+        val savedMessageId: Int = saveStartMessageId[stringChatId] ?: 0
+        val editMessageText: EditMessageText = botMenuFunction.receiveFindClientMenu(savedMessageId, stringChatId,
+        longChatId, updateMessageText, callData_callBackClientId, clientRepository.findAll())
+        protectedExecute(editMessageText)
+    }
+
+
+
+
+
+
+
+
+
+
+
+ */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

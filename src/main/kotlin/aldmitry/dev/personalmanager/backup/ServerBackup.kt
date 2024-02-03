@@ -12,6 +12,8 @@ private val usersList = mutableListOf<User>()
 
 class ServerBackup : DefaultHandler() {
 
+
+
     fun startBackup(directory: String) {
         val factory = SAXParserFactory.newInstance()
         val parser = factory.newSAXParser()
@@ -58,12 +60,17 @@ class ServerBackup : DefaultHandler() {
 
     fun receiveClientsBackup(clients: MutableList<ClientData>) : MutableList<ClientData> {
         clients.addAll(clientsDataList)
+        clientsDataList.clear()
         return clients
     }
 
+
     fun receiveUsersBackup(users: MutableList<User>) : MutableList<User> {
         users.addAll(usersList)
+        usersList.clear()
         return users
     }
+
+
 
 }

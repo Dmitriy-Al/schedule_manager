@@ -6,9 +6,9 @@ class BackupCreator {
 
     fun receiveBackupFile(groupTitle: String, attributes: List<String>): String {
         val stringBuilder = StringBuilder()
-        stringBuilder.append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n   <$groupTitle>")
-        attributes.forEach { stringBuilder.append("\n       $it") }
-        stringBuilder.append("\n    </$groupTitle>")
+        stringBuilder.append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<$groupTitle>")
+        attributes.forEach { stringBuilder.append("\n   $it") }
+        stringBuilder.append("\n</$groupTitle>")
         return stringBuilder.toString()
     }
 

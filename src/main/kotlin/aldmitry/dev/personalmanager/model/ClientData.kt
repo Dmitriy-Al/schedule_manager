@@ -42,8 +42,8 @@ open class ClientData {
 
 
     override fun toString(): String {
-        return "<client clientId=\"$clientId\" chatId=\"$chatId\" specialistId=\"$specialistId\" firstName=\"$firstName\" " +
-                "secondName=\"$secondName\" patronymic=\"$patronymic\" visitAgreement=\"$visitAgreement\" appointmentDate=" +
+        return "<client secondName=\"$secondName\" firstName=\"$firstName\" patronymic=\"$patronymic\" specialistId=" +
+                "\"$specialistId\" clientId=\"$clientId\" chatId=\"$chatId\" visitAgreement=\"$visitAgreement\" appointmentDate=" +
                 "\"$appointmentDate\" appointmentTime=\"$appointmentTime\" remark=\"$remark\" visitHistory=\"$visitHistory\" />"
     }
 
