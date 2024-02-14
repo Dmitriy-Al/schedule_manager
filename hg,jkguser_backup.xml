@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<clients>
+   <client secondName="Антонов" firstName="Антон" patronymic="Антонович" specialistId="2041024245" clientId="4658" chatId="2041024245" visitAgreement="❔" appointmentDate="2024-02-09" appointmentTime="10:15" remark="" visitHistory="
+• 09.02.2024 в 10:15" />
+   <client secondName="Сидоров" firstName="Сидор" patronymic="Сидорович" specialistId="2041024245" clientId="4659" chatId="1" visitAgreement=" ？" appointmentDate="2024-02-09" appointmentTime="17:40" remark="" visitHistory="
+• 09.02.2024 в 17:40" />
+   <client secondName="Сидоров" firstName="Иван" patronymic="Сидорович" specialistId="2041024245" clientId="4657" chatId="1" visitAgreement=" ？" appointmentDate="2024-02-06" appointmentTime="10:50" remark="" visitHistory="" />
+   <client secondName="Сидоров" firstName="Петр" patronymic="Петрович" specialistId="2041024245" clientId="4660" chatId="2041024245" visitAgreement="❔" appointmentDate="2024-03-02" appointmentTime="14:40" remark="" visitHistory="" />
+   <client secondName="Андреев" firstName="Андрей" patronymic="Андреевич" specialistId="2041024245" clientId="4661" chatId="2041024245" visitAgreement="❔" appointmentDate="2024-02-08" appointmentTime="11:15" remark="" visitHistory=" • 08.02.2024 в 11:15" />
+</clients>

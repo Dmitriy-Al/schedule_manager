@@ -18,7 +18,7 @@ class ServerBackup : DefaultHandler() {
         val factory = SAXParserFactory.newInstance()
         val parser = factory.newSAXParser()
         val serverBackup = ServerBackup()
-        parser.parse(File(directory), serverBackup) // TODO посмотреть File
+        parser.parse(File(directory), serverBackup)
     }
 
 

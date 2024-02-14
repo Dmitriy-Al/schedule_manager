@@ -39,6 +39,11 @@ open class User {
     open var sendBeforeDays: Long = 1
 
 
+    fun getFullName(): String {
+        return "$secondName $firstName $patronymic"
+    }
+
+
     override fun toString(): String {
         return "<user chatId=\"$chatId\" secondName=\"$secondName\" firstName=\"$firstName\" patronymic=\"$patronymic\" " +
                 "password=\"$password\" profession=\"$profession\" sendTime=\"$sendTime\" " +

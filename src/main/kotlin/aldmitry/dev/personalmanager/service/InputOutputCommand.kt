@@ -1,7 +1,7 @@
 package aldmitry.dev.personalmanager.service
 
+import aldmitry.dev.personalmanager.apptexts.*
 import aldmitry.dev.personalmanager.backup.BackupCreator
-import aldmitry.dev.personalmanager.backup.ServerBackup
 import aldmitry.dev.personalmanager.config.Config
 import aldmitry.dev.personalmanager.extendfunctions.protectedExecute
 import aldmitry.dev.personalmanager.extendfunctions.putData
@@ -21,15 +21,13 @@ import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageTe
 import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand
 import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScopeDefault
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
-private val config = Config()
+val config = Config()
 
 @Component
 class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowired val userRepository: UserDao) :
@@ -37,10 +35,10 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
 
     init { // Команды меню бота
         val botCommandList: List<BotCommand> = listOf(
-            BotCommand("/start", "Запуск программы"),
+            BotCommand(callData_startBot, "Запуск программы"),
             BotCommand("/star", "Запуск программы"),
-            BotCommand("/help", "Полезная информация"),
-            BotCommand("/deletedata", "Удаление всех данных пользователя")
+            BotCommand(callData_helpCommand, "Полезная информация"),
+            BotCommand(callData_deleteUser, "Удаление всех данных пользователя")
         )
         try {
             this.execute(SetMyCommands(botCommandList, BotCommandScopeDefault(), null))
@@ -51,46 +49,16 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
 
     private var textForStartMessage: String = ""
     private val botMenuFunction = BotMenuFunction()
-    private val botMessageFunction = BotMessageFunction()
 
     private final val tempData = HashMap<String, String>()
-    private final val saveChatId = HashMap<String, Long>()
+    private final val savedId = HashMap<String, Long>()
     private final val firstName = HashMap<String, String>()
     private final val secondName = HashMap<String, String>()
     private final val patronymic = HashMap<String, String>()
-    private final val saveClientId = HashMap<String, String>()
+    private final val clientIdExistCheck = HashMap<String, String>() // если клиент существует, clientId добавляется в Map для последующей проверки
     private final val comeBackInfo = HashMap<String, String>()
     private final val registerPassword = HashMap<String, Int>()
-    private final val saveStartMessageId = HashMap<String, Int>()
-
-    private final val findClient = "FIND_CLIENT"
-    private final val inputRemark = "INPUT_REMARK"
-    private final val inputPassword = "INPUT_PASSWORD"
-    private final val inputFirstName = "INPUT_FIRST_NAME"
-    private final val inputProfession = "INPUT_PROFESSION"
-    private final val inputPatronymic = "INPUT_PATRONYMIC"
-    private final val inputSecondName = "INPUT_SECOND_NAME"
-    private final val inputChangeUser = "INPUT_CHANGE_USER"
-    private final val inputOldPassword = "INPUT_OLD_PASSWORD"
-    private final val inputUploadBackup = "INPUT_UPLOAD_BACKUP"
-    private final val inputMessageForAll = "INPUT_MESSAGE_FOR_ALL"
-    private final val inputRepairPassword = "INPUT_REPAIR_PASSWORD"
-    private final val inputSupportMessage = "INPUT_SUPPORT_MESSAGE"
-    private final val inputMessageForUser = "INPUT_MESSAGE_FOR_USER"
-    private final val inputLoadUserBackup = "INPUT_LOAD_USER_BACKUP"
-    private final val inputSaveUserBackup = "INPUT_SAVE_USER_BACKUP"
-    private final val inputSaveClientBackup = "INPUT_SAVE_CLIENT_BACKUP"
-    private final val inputLoadClientBackup = "INPUT_LOAD_CLIENT_BACKUP"
-    private final val inputTextForStartMessage = "INPUT_FOR_START_MESSAGE"
-
-    private final val qSym = " ？"
-    final val callData_clientData = "#cldata"
-    final val callData_callBackClientId = "#clid"
-    final val callData_findClientByName = "#findcli"
-    final val callData_findClientForMenu = "#finmenu"
-    final val callData_addNewClient =  "Добавить нового клиента/пациента"
-    final val callData_generateCode = "Генерировать код для клиента" // "Генерировать код и добавить клиента"
-    final val callData_addCommonClient = "Добавить клиента без кода" // Добавить клиента без Telegram
+    private final val saveMessageId = HashMap<String, Int>()
 
 
     override fun getBotUsername(): String {
@@ -105,31 +73,37 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
             val updateMessageText: String = update.message.text
             val stringChatId: String = longChatId.toString()
 
-            if (!updateMessageText.contains("/start") && !updateMessageText.contains("/help") &&
-                    !updateMessageText.contains("/deletedata")) {
+            if (!updateMessageText.contains(callData_startBot) && !updateMessageText.contains(callData_helpCommand) &&
+                    !updateMessageText.contains(callData_deleteUser)) {
 
                 when (tempData[stringChatId]) { // если в Map добавляется строка-константа, Update-сообщение (updateMessageText) запускает одну из функций в блоке
                     inputFirstName -> setFirstname(stringChatId, updateMessageText)
-                    inputRemark -> addClientRemark(stringChatId, updateMessageText)
-                    inputChangeUser -> changeUserData(updateMessageText, stringChatId)
+                    inputRemark -> protectedExecute(botMenuFunction.addClientRemark(stringChatId, intMessageId, savedId, updateMessageText, clientRepository))
                     inputMessageForAll -> messageForAllUsers(updateMessageText, stringChatId)
                     inputMessageForUser -> sendMessageForUser(stringChatId, updateMessageText)
-                    inputPassword -> setUserPassword(stringChatId, longChatId, updateMessageText)
-                    inputSecondName -> inputUserName(stringChatId, longChatId, updateMessageText)
+                    inputPassword -> protectedExecute(botMenuFunction.setUserPassword(stringChatId, saveMessageId[stringChatId] ?: 0, longChatId, updateMessageText, userRepository))
                     inputPatronymic -> setPatronymic(stringChatId, longChatId, updateMessageText)
-                    inputProfession -> setProfession(stringChatId, longChatId, updateMessageText)
-                    inputUploadBackup -> uploadServers(longChatId, stringChatId, updateMessageText)
-                    inputRepairPassword -> repairAccount(stringChatId, longChatId, updateMessageText)
+                    inputProfession -> setUserDataInDB(stringChatId, longChatId, updateMessageText)
+                    inputUploadBackup -> uploadServerToChat(longChatId, stringChatId, updateMessageText)
                     inputTextForStartMessage -> setTextIntoStartMessage(stringChatId, updateMessageText)
-                    inputSupportMessage -> messageForSupport(stringChatId, longChatId, updateMessageText)
-                    inputOldPassword -> inputOldUserPassword(stringChatId, longChatId, updateMessageText)
-                    findClient -> sendFindClient(stringChatId, longChatId, updateMessageText, callData_callBackClientId)
-                    inputLoadUserBackup -> putBackupToServer(stringChatId, longChatId, updateMessageText, config.userBackupTitle)
-                    inputLoadClientBackup -> putBackupToServer(stringChatId, longChatId, updateMessageText, config.clientBackupTitle)
-                    inputSaveUserBackup -> createBackupInDirectory(stringChatId, "users", updateMessageText,
-                            config.userBackupTitle, userRepository.findAll().flatMap { mutableListOf(it.toString()) })
-                    inputSaveClientBackup -> createBackupInDirectory(stringChatId, "clients", updateMessageText,
-                            config.clientBackupTitle, clientRepository.findAll().flatMap { mutableListOf(it.toString()) })
+                    inputSupportMessage -> sendMessageForSupport(stringChatId, longChatId, updateMessageText)
+                    inputOldPassword -> protectedExecute(botMenuFunction.inputOldUserPassword(stringChatId, saveMessageId[stringChatId] ?: 0, longChatId, tempData, updateMessageText, userRepository))
+                    inputLoadUserBackup -> protectedExecute(botMenuFunction.putUserBackupToServer(stringChatId, saveMessageId[stringChatId] ?: 0, longChatId, updateMessageText, tempData, userRepository))
+                    inputLoadClientBackup -> protectedExecute(botMenuFunction.putClientBackupToServer(stringChatId, saveMessageId[stringChatId] ?: 0, updateMessageText, tempData, clientRepository))
+                    inputRepairPassword -> protectedExecute(botMenuFunction.repairUserAccount(stringChatId,
+                 saveMessageId[stringChatId] ?: 0, longChatId, updateMessageText, userRepository, clientRepository))
+                    inputUserSecondName -> checkTextContentForRegister(stringChatId, longChatId, updateMessageText,
+                            inputUserSecondName)
+                    inputClientSecondName -> checkTextContentForRegister(stringChatId, longChatId, updateMessageText,
+                            inputClientSecondName)
+                    inputChangeUser -> protectedExecute(botMenuFunction.changeUserData(updateMessageText, stringChatId,
+                            tempData, saveMessageId[stringChatId] ?: 0, userRepository))
+                    findClient -> protectedExecute(botMenuFunction.receiveFindClientMenu(saveMessageId[stringChatId] ?: 0,
+                            stringChatId, longChatId, updateMessageText, callData_callBackClientId, clientRepository.findAll()))
+                    inputSaveUserBackup -> protectedExecute(botMenuFunction.createBackupInDirectory(stringChatId, saveMessageId[stringChatId] ?: 0,
+                            config.userXmlGroupTitle, updateMessageText, config.userBackupTitle, userRepository.findAll().flatMap { mutableListOf(it.toString()) }))
+                    inputSaveClientBackup -> protectedExecute(botMenuFunction.createBackupInDirectory(stringChatId, saveMessageId[stringChatId] ?: 0,
+                            config.clientXmlGroupTitle, updateMessageText, config.userBackupTitle, clientRepository.findAll().flatMap { mutableListOf(it.toString()) }))
                 }
             }
 
@@ -156,17 +130,22 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
 
             when  {
                 updateMessageText.split(" ").size >= 4 && month != "NULL" -> {
-                    schedule(stringChatId, longChatId, updateMessageText, month)
+                    tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
+                    protectedExecute(botMenuFunction.createClientAppointment(stringChatId, saveMessageId[stringChatId] ?: 0,
+                    updateMessageText, month, callData_clientData, clientRepository.findAll()))
                 }
                 updateMessageText.split(" ").size == 3 -> {
-                    setSecondname(stringChatId, longChatId, updateMessageText)
+                    savedId[stringChatId] = 1
+                    if (isSubscriptionExpire(longChatId)) protectedExecute(botMenuFunction.receiveSubscriptionMessage(
+         saveMessageId[stringChatId] ?: 0, stringChatId)) else checkDoubleOfClient(stringChatId, longChatId, updateMessageText)
                 }
                 !updateMessageText.contains(" ") && updateMessageText.length in 3..14 -> {
-                    sendFindClient(stringChatId, longChatId, updateMessageText, "#getmenu")
-                    //findClient(stringChatId, longChatId, updateMessageText, "#getmenu")
+                    protectedExecute(botMenuFunction.receiveFindClientMenu(saveMessageId[stringChatId] ?: 0,
+                            stringChatId, longChatId, updateMessageText, callData_findClient, clientRepository.findAll()))
                 }
                 updateMessageText.length > 2 && tempData[stringChatId].isNullOrEmpty() -> {
-                    searchClient(stringChatId, longChatId, updateMessageText)
+                    protectedExecute(botMenuFunction.receiveSearchClientMenu(stringChatId,
+                    saveMessageId[stringChatId] ?: 0, longChatId, updateMessageText, clientRepository.findAll()))
                 }
               }
             }
@@ -175,10 +154,10 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
 
             when (updateMessageText) { // команды
                 "/star" -> sendStartMessage(stringChatId, longChatId)
-                "/start" -> sendStartMessage(stringChatId, longChatId) // начало работы бота
-                "/help" -> sendHelpMessage(stringChatId, longChatId)
-                "/deletedata" -> deleteUserData(stringChatId, longChatId)
-                else -> protectedExecute(DeleteMessage().putData(stringChatId, intMessageId)) // TODO удалить: else -> if (tempData[stringChatId].isNullOrEmpty()) protectedExecute(DeleteMessage().putData(stringChatId, intMessageId))
+                callData_startBot -> sendStartMessage(stringChatId, longChatId) // начало работы бота
+                callData_helpCommand -> sendHelpMessage(stringChatId, longChatId)
+                callData_deleteUser -> deleteUserData(stringChatId, longChatId)
+                else -> if (tempData[stringChatId].isNullOrEmpty()) protectedExecute(DeleteMessage().putData(stringChatId, intMessageId)) // TODO удалить: else -> if (tempData[stringChatId].isNullOrEmpty()) protectedExecute(DeleteMessage().putData(stringChatId, intMessageId))
             }
 
             } else if (update.hasCallbackQuery()) {
@@ -188,108 +167,112 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
                 val stringChatId: String = update.callbackQuery.message.chatId.toString()
 
                 when {
-                    callBackData.contains("\uD83D\uDD19  Назад в меню") -> {
-                        editStartMessage(stringChatId, longChatId, intMessageId)
-                    }
-
-                    callBackData == "#acceptregister" -> {
-                        setFullName(stringChatId, longChatId)
+                    callBackData.contains(callData_mainMenu) -> {
+                        sendEditStartMessage(stringChatId, longChatId, intMessageId)
                     }
 
                     callBackData.contains(callData_generateCode) -> {
-                        generateCode(stringChatId, callBackData, intMessageId)
+                        protectedExecute(botMenuFunction.generateCode(stringChatId, callBackData, intMessageId,
+                                savedId, registerPassword, clientIdExistCheck))
                     }
 
-                    callBackData == "#defaultchatbackup" -> {
-                        uploadServers(longChatId, stringChatId, config.defaultDirectory)
+                    callBackData == callData_chatBackup -> {
+                        uploadServerToChat(longChatId, stringChatId, config.defaultDirectory)
                     }
 
-                    callBackData == "Меню специалиста" -> {
-                        specialistUserMenu(longChatId, stringChatId, intMessageId)
+                    callBackData == callData_specMenu -> {
+                        protectedExecute(botMenuFunction.specialistUserMenu(longChatId, stringChatId, intMessageId,
+                                textForStartMessage, clientRepository))
                     }
 
                     callBackData == callData_addNewClient -> {
-                        addNewClient(longChatId, stringChatId, intMessageId)
+                        protectedExecute(botMenuFunction.addNewClient(stringChatId, intMessageId, isSubscriptionExpire(longChatId)))
                     }
 
-                    callBackData == "\uD83D\uDCC5  Посмотреть мою запись" -> {
-                        lookClientAppointment(longChatId, stringChatId, intMessageId)
+                    callBackData == callData_myAppointment -> {
+                        protectedExecute(botMenuFunction.lookClientAppointment(longChatId,
+                                stringChatId, intMessageId, clientRepository, userRepository))
                     }
 
-                    callBackData == "#mycli" -> {
-                        receiveClientsMenu(longChatId, stringChatId, intMessageId)
+                    callBackData == callData_myClients -> {
+                        protectedExecute(botMenuFunction.receiveClientsMenu(longChatId, stringChatId, intMessageId,
+                                clientRepository, userRepository))
                     }
 
-                    callBackData == "Посмотреть запись ко мне" -> {
-                        receiveSchedule(longChatId, stringChatId, intMessageId)
+                    callBackData == callData_appointmentToMe -> {
+                        protectedExecute(botMenuFunction.receiveSchedule(longChatId, stringChatId, intMessageId, clientRepository))
                     }
 
-                    callBackData.contains("#allcli") -> {
-                        receiveAllClients(longChatId, stringChatId, callBackData, intMessageId)
+                    callBackData.contains(callData_allClients) -> {
+                        protectedExecute(botMenuFunction.receiveAllClients(longChatId, stringChatId, callBackData,
+                                intMessageId, clientRepository))
                     }
 
-                    callBackData.contains("Заметки клиента") -> {
-                        receiveClientRemark(stringChatId, callBackData, intMessageId)
+                    callBackData.contains(callData_clientRemark) -> {
+                        protectedExecute(botMenuFunction.receiveClientRemark(stringChatId, callBackData,
+                                intMessageId, tempData, savedId, clientRepository))
                     }
 
-                    callBackData.contains("#delrem") -> {
-                        deleteClientRemark(stringChatId, callBackData, intMessageId)
+                    callBackData.contains(callData_delClientRemark) -> {
+                        clientTemporaryData(stringChatId)
+                        protectedExecute(botMenuFunction.deleteClientRemark(stringChatId, callBackData, intMessageId, clientRepository))
                     }
 
-                    callBackData.contains("#timedwn") -> {
-                        putSendMessageTime(longChatId, stringChatId, intMessageId, -1)
+                    callBackData.contains(callData_timeDown) -> {
+                        protectedExecute(botMenuFunction.putSendMessageTime(longChatId, stringChatId, intMessageId, -1, userRepository))
                     }
 
-                    callBackData.contains("#timeup") -> {
-                        putSendMessageTime(longChatId, stringChatId, intMessageId, 1)
+                    callBackData.contains(callData_timeUp) -> {
+                        protectedExecute(botMenuFunction.putSendMessageTime(longChatId, stringChatId, intMessageId, 1, userRepository))
                     }
 
-                    callBackData.contains("#daydwn") -> {
-                        putSendMessageDay(longChatId, stringChatId, intMessageId, -1)
+                    callBackData.contains(callData_dayDown) -> {
+                        protectedExecute(botMenuFunction.putSendMessageDay(longChatId, stringChatId, intMessageId, -1, userRepository))
                     }
 
-                    callBackData.contains("#dayup") -> {
-                        putSendMessageDay(longChatId, stringChatId, intMessageId, 1)
+                    callBackData.contains(callData_dayUp) -> {
+                        protectedExecute(botMenuFunction.putSendMessageDay(longChatId, stringChatId, intMessageId, 1, userRepository))
                     }
 
-                    callBackData.contains("#zonedwn") -> {
-                        putTimeZone(longChatId, stringChatId, intMessageId, -1)
+                    callBackData.contains(callData_zoneDown) -> {
+                        protectedExecute(botMenuFunction.putTimeZone(longChatId, stringChatId, intMessageId, -1, userRepository))
                     }
 
-                    callBackData.contains("#zoneup") -> { // TODO м.б. == \contains
-                        putTimeZone(longChatId, stringChatId, intMessageId, 1)
+                    callBackData.contains(callData_zoneUp) -> { // TODO м.б. == \contains
+                        protectedExecute(botMenuFunction.putTimeZone(longChatId, stringChatId, intMessageId, 1, userRepository))
                     }
 
-                    callBackData.contains("#getmenu") -> {
-                        receiveClientSettingMenu(stringChatId, intMessageId, callBackData)
+                    callBackData.contains(callData_clientSettingMenu) -> {
+                        protectedExecute(botMenuFunction.receiveClientSettingMenu(stringChatId, intMessageId, callBackData, isSubscriptionExpire(longChatId), clientRepository))
                     }
 
-                    callBackData.contains("@") -> {
-                        receiveAppointmentDay(longChatId, stringChatId, intMessageId, callBackData)
+                    callBackData.contains(callData_appointmentDay) -> {
+                        protectedExecute(botMenuFunction.receiveAppointmentDay(longChatId, stringChatId, intMessageId, callBackData, comeBackInfo, clientRepository))
                     }
 
-                    callBackData.contains("&") -> {
-                        receiveAppointmentHour(longChatId, stringChatId, intMessageId, callBackData)
+                    callBackData.contains(callData_appointmentHour) -> {
+                        protectedExecute(botMenuFunction.receiveAppointmentHour(longChatId, stringChatId, intMessageId, callBackData, comeBackInfo, clientRepository))
                     }
 
-                    callBackData.contains("#hou") -> {
-                        receiveAppointmentMinute(longChatId, stringChatId, intMessageId, callBackData)
+                    callBackData.contains(callData_appointmentMin) -> {
+                        protectedExecute(botMenuFunction.receiveAppointmentMinute(stringChatId, intMessageId, callBackData, comeBackInfo))
                     }
 
-                    callBackData.contains("#disapp") -> {
+                    callBackData.contains(callData_cancelAppointment) -> {
                         cancelAppointment(stringChatId, intMessageId, callBackData)
                     }
 
-                    callBackData.contains("#approve") -> {
+                    callBackData.contains(callData_approveAppointment) -> {
                         approveAppointment(stringChatId, intMessageId, callBackData)
                     }
 
-                    callBackData.contains("#usr") -> {
-                        changeUserData(stringChatId, intMessageId, callBackData)
+                    callBackData.contains(callData_changeUser) -> {
+                        protectedExecute(botMenuFunction.changeUserData(stringChatId, intMessageId, callBackData, tempData, userRepository))
                     }
 
-                    callBackData.contains("Моя запись к специалисту") -> {
-                        receiveAppointmentForClient(longChatId, stringChatId, intMessageId)
+                    callBackData.contains(callData_appointmentToSpec) -> {
+                        protectedExecute(botMenuFunction.receiveAppointmentForClient(longChatId, stringChatId,
+                                intMessageId, userRepository, clientRepository))
                     }
 
                     callBackData.contains(callData_clientData) -> {
@@ -297,329 +280,313 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
                     }
 
                     callBackData.contains(callData_callBackClientId) -> {
-                        receiveAppointmentMonth(stringChatId, intMessageId, callBackData)
+                        protectedExecute(botMenuFunction.receiveAppointmentMonth(stringChatId, intMessageId, callBackData, clientRepository))
                     }
 
-                    callBackData.contains("Установить пароль") -> { // TODO м.б. == \contains
-                        putUserPassword(longChatId, stringChatId, intMessageId)
+                    callBackData.contains(callData_setPassword) -> { // TODO м.б. == \contains
+                        protectedExecute(botMenuFunction.receiveUserPasswordMenu(longChatId, stringChatId, intMessageId, tempData, userRepository))
                     }
 
-                    callBackData.contains("#cancapp") -> {
+                    callBackData.contains(callData_cancelClientAppointment) -> {
                         cancelClientAppointment(longChatId, stringChatId, callBackData, intMessageId)
                     }
 
-                    callBackData == "#createservuse" -> {
-                        val usersList = userRepository.findAll().flatMap { listOf(it.toString()) }
-                        createDefaultBackup(stringChatId, intMessageId, config.userBackupTitle, usersList)
+                    callBackData == callData_setFullNameInDb -> {
+                        savedId[stringChatId] = 1
+                        setFullNameInDb(stringChatId, longChatId)
                     }
 
-                    callBackData == "#createservcli" -> {
-                        val clientsList = clientRepository.findAll().flatMap { listOf(it.toString()) }
-                        createDefaultBackup(stringChatId, intMessageId, config.clientBackupTitle, clientsList)
+                    callBackData == callData_defaultUserBackup -> {
+                        val usersList: List<String> = userRepository.findAll().flatMap { listOf(it.toString()) }
+                        protectedExecute(botMenuFunction.createDefaultBackup(stringChatId, intMessageId, config.userBackupTitle, usersList))
                     }
 
-                    callBackData == "Очистить чат" -> {
+                    callBackData == callData_defaultClientBackup -> {
+                        val clientsList: List<String> = clientRepository.findAll().flatMap { listOf(it.toString()) }
+                        protectedExecute(botMenuFunction.createDefaultBackup(stringChatId, intMessageId, config.clientBackupTitle, clientsList))
+                    }
+
+                    callBackData == callData_cleanChatMenu -> {
                         val editMessageText = EditMessageText()
-                        editMessageText.putData(stringChatId, intMessageId, "❗  Данное действие необходимо подтвердить.")
-                        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  Назад в меню", "\uD83D\uDD19  Назад в меню", "Очистить чат", "#cleanchat")
+                        editMessageText.putData(stringChatId, intMessageId, text_actAccept)
+                        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  Назад в меню", callData_mainMenu, "Очистить чат", callData_cleanChat)
                         protectedExecute(editMessageText)
                     }
 
-                    callBackData == "#cleanchat" -> {
-                        for ((chatId, messageId) in saveStartMessageId){
+                    callBackData == callData_cleanChat -> {
+                        for ((chatId, messageId) in saveMessageId){
                             protectedExecute(DeleteMessage().putData(chatId, messageId))
                         }
                     }
 
-                    callBackData == "Редактировать пользователя" -> {
+                    callBackData == callData_editeUser -> {
                         val usersList = userRepository.findAll().flatMap { mutableListOf("${it.chatId} ${it.secondName}") }.toMutableList()
                         val editMessageText = EditMessageText().putData(stringChatId, intMessageId, "\uD83D\uDD30  Выберите пользователя из списка:")
-                        usersList.add("\uD83D\uDD19  Назад в меню")
-                        editMessageText.replyMarkup = botMenuFunction.createDataButtonSet(usersList, "#usr")
+                        usersList.add(callData_mainMenu)
+                        editMessageText.replyMarkup = botMenuFunction.createDataButtonSet(usersList, callData_changeUser)
                         protectedExecute(editMessageText)
                     }
 
-                    callBackData == "Сообщение пользователю" -> {
+                    callBackData == callData_messageToUser -> {
                         val editMessageText = EditMessageText()
-                        editMessageText.putData(stringChatId, intMessageId, "\uD83D\uDD30  Введите id пользователя и # (пример: 123456789#), затем текст сообщения для пользователя.")
-                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню", "\uD83D\uDD19  Назад в меню")
+                        editMessageText.putData(stringChatId, intMessageId, text_messageToUser)
+                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню", callData_mainMenu)
                         protectedExecute(editMessageText)
                         tempData[stringChatId] = inputMessageForUser
                     }
 
-                    callBackData == "Сообщение всем пользователям" -> {
+                    callBackData == callData_messageToAllUsers -> {
                         val editMessageText = EditMessageText()
-                        editMessageText.putData(stringChatId, intMessageId, "\uD83D\uDD30  Введите текст сообщения и отправьте его в чат. Текст длинной менее 3х символов не будет отправлен.")
-                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню", "\uD83D\uDD19  Назад в меню")
+                        editMessageText.putData(stringChatId, intMessageId, text_messageToAllUsers)
+                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню", callData_mainMenu)
                         protectedExecute(editMessageText)
                         tempData[stringChatId] = inputMessageForAll
                     }
 
-                    callBackData == "StartMessage текст" -> {
+                    callBackData == callData_messageToMainMenu -> {
                         val editMessageText = EditMessageText()
-                        editMessageText.putData(stringChatId, intMessageId, "\uD83D\uDD30  Введите текст сообщения для всех пользователей. Текст будет отображаться в главном (стартовом) сообщении. " +
-                                "Текст длинной менее 3 символов удаляет уже отображающийся текст не устанавливая новый.")
-                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню", "\uD83D\uDD19  Назад в меню")
+                        editMessageText.putData(stringChatId, intMessageId, text_forMainMenuMessage)
+                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню", callData_mainMenu)
                         protectedExecute(editMessageText)
                         tempData[stringChatId] = inputTextForStartMessage
                     }
 
-                    callBackData == "Backup меню" -> {
-                        val editMessageText = EditMessageText().putData(stringChatId, intMessageId, "\uD83D\uDD30  Опции Backup меню:\n\n\uD83D\uDD39 <Выгрузить backup в чат> - доступно только при наличии файлов в директории.\n" +
-                                "\uD83D\uDD39 <Сохранить user_backup/client_backup> - резервное копирование баз данных в выбранную директорию.\n\uD83D\uDD39 <Backup в user/client сервер> - загрузка резервной копии данных в выбранный сервер.\n\uD83D\uDD39<❗ Удалить сервер> - удаляет все данные выбранного сервера.")
-                        val menuList = listOf("Выгрузить backup в чат", "Сохранить client_backup", "Сохранить user_backup", "Backup в client сервер", "Backup в user сервер", "❗ Удалить сервер", "\uD83D\uDD19  Назад в меню")
+                    callBackData == callData_backupMenu -> {
+                        val editMessageText = EditMessageText().putData(stringChatId, intMessageId, text_backupToChat)
+                        val menuList = listOf(callData_backupToChat, callData_saveClientBackup, callData_saveUserBackup, callData_backupInClient, callData_backupInUser, callData_delUserServer, callData_mainMenu)
                         editMessageText.replyMarkup = botMenuFunction.createButtonSet(menuList)
                         protectedExecute(editMessageText)
                 }
 
-                    callBackData == "Сохранить user_backup" -> {
+                    callBackData == callData_saveUserBackup -> {
                         val backupDirectory = config.defaultDirectory + config.userBackupTitle
                         val editMessageText = EditMessageText()
-                        editMessageText.putData(stringChatId, intMessageId, "\uD83D\uDD30  Бэкап-файл данных User с расширением .xml будет создан в директории по умолчанию: $backupDirectory после нажатия клавиши <Создать>. Если необходимо создать файл <users_backup.xml> в другой директории, необходимо прописать путь к ней (например: C:/) и отправить сообщение в чат.")
-                        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню", "Создать", "#createservuse")
+                        editMessageText.putData(stringChatId, intMessageId, "$text_backupDataPartOne$backupDirectory$text_backupDataPartTwo")
+                        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", callData_mainMenu, "Создать", callData_defaultUserBackup)
                         protectedExecute(editMessageText)
                         tempData[stringChatId] = inputSaveUserBackup
                     }
 
-                    callBackData == "Сохранить client_backup" -> {
+                    callBackData == callData_saveClientBackup -> {
                         val backupDirectory = config.defaultDirectory + config.clientBackupTitle
                         val editMessageText = EditMessageText()
-                        editMessageText.putData(stringChatId, intMessageId, "\uD83D\uDD30  Бэкап-файл данных ClientData с расширением .xml будет создан в директории по умолчанию: $backupDirectory после нажатия клавиши <Создать>. Если необходимо создать файл <client_backup.xml> в другой директории, необходимо прописать путь к ней (например: C:/) и отправить сообщение в чат.")
-                        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню", "Создать", "#createservcli")
+                        editMessageText.putData(stringChatId, intMessageId, "$text_backupDataPartOne$backupDirectory$text_backupDataPartTwo")
+                        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", callData_mainMenu, "Создать", callData_defaultClientBackup)
                         protectedExecute(editMessageText)
                         tempData[stringChatId] = inputSaveClientBackup
                     }
 
-                    callBackData == "Backup в client сервер" -> {
+                    callBackData == callData_backupInClient -> {
                         val backupDirectory = config.defaultDirectory + config.clientBackupTitle
-                        val textForMessage = "\uD83D\uDD30  Бэкап сервера ClientData будет получен из директории по умолчанию: $backupDirectory после нажатия клавиши <Загрузить файл>. Если необходимо загрузить файл <client_backup.xml> из другой директории, необходимо прописать путь к ней (например: C:/) и отправить сообщение в чат."
+                        val textForMessage = "$text_getBackupPartOne$backupDirectory$text_getBackupPartTwo"
                         val editMessageText = EditMessageText()
                         editMessageText.putData(stringChatId, intMessageId, textForMessage)
-                        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню", "Загрузить файл", "#loadbackupcli")
+                        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", callData_mainMenu, "Загрузить файл", callData_loadBackupClient)
                         protectedExecute(editMessageText)
                         tempData[stringChatId] = inputLoadClientBackup
                     }
 
-                    callBackData == "Backup в user сервер" -> {
+                    callBackData ==  callData_backupInUser -> {
                         val backupDirectory = config.defaultDirectory + config.userBackupTitle
-                        val textForMessage = "\uD83D\uDD30  Бэкап сервера User будет получен из директории по умолчанию: $backupDirectory после нажатия клавиши <Загрузить файл>. Если необходимо загрузить файл <user_backup.xml> из другой директории, необходимо прописать путь к ней (например: C:/) и отправить сообщение в чат."
+                        val textForMessage = "$text_getBackupPartOne$backupDirectory$text_getBackupPartTwo"
                         val editMessageText = EditMessageText()
                         editMessageText.putData(stringChatId, intMessageId, textForMessage)
-                        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню", "Загрузить файл", "#loadbackupuse")
+                        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", callData_mainMenu, "Загрузить файл", callData_loadBackupUser)
                         protectedExecute(editMessageText)
                         tempData[stringChatId] = inputLoadUserBackup
                     }
 
-                    callBackData == "#loadbackupcli" -> {
-                        val backupDirectory = config.defaultDirectory + config.clientBackupTitle
-                        val serverBackup = ServerBackup()
-                        serverBackup.startBackup(backupDirectory)
-                        val clientsDataList = serverBackup.receiveClientsBackup(mutableListOf())
-                        clientsDataList.forEach { clientRepository.save(it) }
-
-                        val textForMessage = "\uD83D\uDD30  Бэкап сервера ClientData будет получен из директории по умолчанию:\n$backupDirectory"
-                        val editMessageText = EditMessageText()
-                        editMessageText.putData(stringChatId, intMessageId, textForMessage)
-                        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню", "В backup меню", "Backup меню")
-                        protectedExecute(editMessageText)
+                    callBackData == callData_loadBackupClient -> {
+                        protectedExecute(botMenuFunction.putClientBackupToServer(stringChatId, intMessageId, config.defaultDirectory, tempData, clientRepository))
                     }
 
-                    callBackData == "#loadbackupuse" -> {
-                        val backupDirectory = config.defaultDirectory + config.userBackupTitle
-                        val serverBackup = ServerBackup()
-                        serverBackup.startBackup(backupDirectory)
-                        val userList = serverBackup.receiveUsersBackup(mutableListOf())
-                        userList.filter { it.chatId != longChatId }.forEach { userRepository.save(it) }
-
-                        val textForMessage = "\uD83D\uDD30  Бэкап сервера User получен из директории по умолчанию:\n$backupDirectory"
-                        val editMessageText = EditMessageText()
-                        editMessageText.putData(stringChatId, intMessageId, textForMessage)
-                        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню", "В backup меню", "Backup меню")
-                        protectedExecute(editMessageText)
+                    callBackData == callData_loadBackupUser -> {
+                        protectedExecute(botMenuFunction.putUserBackupToServer(stringChatId, intMessageId, longChatId, config.defaultDirectory, tempData, userRepository))
                     }
 
-                    callBackData == "❗ Удалить сервер" -> {
-                        val editMessageText = EditMessageText().putData(stringChatId, intMessageId, "❗ Внимание, удаление сервера может привести к необратимой потере данных, убедитесь в наличии резервной копии.")
-                        val menuList = listOf("❗ Удалить client сервер", "❗ Удалить user сервер", "Backup меню", "\uD83D\uDD19  Назад в меню")
+                    callBackData == callData_delServerMenu -> {
+                        val editMessageText = EditMessageText().putData(stringChatId, intMessageId, text_warningText)
+                        val menuList = listOf(callData_delClientServer, callData_delUserServer, callData_backupMenu, callData_mainMenu)
                         editMessageText.replyMarkup = botMenuFunction.createButtonSet(menuList)
                         protectedExecute(editMessageText)
                     }
 
-                    callBackData == "❗ Удалить user сервер" -> {
+                    callBackData == callData_delUserServer -> {
                         val adminUser = userRepository.findById(longChatId).get()
                         userRepository.deleteAll()
                         userRepository.save(adminUser)
-                        val editMessageText = EditMessageText().putData(stringChatId, intMessageId, "\uD83D\uDD30  Данные User-сервера были удалены.")
-                        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню", "В backup меню", "Backup меню")
+                        val editMessageText = EditMessageText().putData(stringChatId, intMessageId, text_wasDeleted)
+                        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", callData_mainMenu, "В backup меню", callData_backupMenu)
                         protectedExecute(editMessageText)
 
                     }
 
-                    callBackData == "❗ Удалить client сервер" -> {
+                    callBackData == callData_delClientServer -> {
                         clientRepository.deleteAll()
-                        val editMessageText = EditMessageText().putData(stringChatId, intMessageId,  "\uD83D\uDD30  Данные ClientData-сервера были удалены.")
-                        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню", "В backup меню", "Backup меню")
+                        val editMessageText = EditMessageText().putData(stringChatId, intMessageId,  text_wasDeleted)
+                        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", callData_mainMenu, "В backup меню", callData_backupMenu)
                         protectedExecute(editMessageText)
                     }
 
-                    callBackData == "Выгрузить backup в чат" -> {
-                        val textForMessage = "\uD83D\uDD30  backup серверов (при наличии!) будет выгружен в admin-чат Telegram из директории по умолчанию после нажатия клавиши <По умолчанию>. Также путь к backup (например: C:/) можно отправить в чат и выгрузить файлы из указанной директории."
+                    callBackData == callData_backupToChat -> {
                         val editMessageText = EditMessageText()
-                        editMessageText.putData(stringChatId, intMessageId, textForMessage)
-                        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("В backup меню", "Backup меню", "<По умолчанию", "#defaultchatbackup")
+                        editMessageText.putData(stringChatId, intMessageId, text_uploadToServer)
+                        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("В backup меню", callData_backupMenu, "По умолчанию", callData_chatBackup)
                         protectedExecute(editMessageText)
                         tempData[stringChatId] = inputUploadBackup
                     }
 
-                    callBackData == "Зарегистрироваться как специалист" -> {
+                    callBackData == callData_regAsSpec -> {
                         val editMessageText = EditMessageText()
-                        editMessageText.putData(stringChatId, intMessageId, "ℹ  В этом разделе вы можете зарегистрироваться как специалист и упростить ведение записи своих клиентов/пациентов.")
+                        editMessageText.putData(stringChatId, intMessageId, text_regAsSpec)
                         editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("Зарегистрироваться",
-                            "#reg", "\uD83D\uDD19  Назад в меню", "\uD83D\uDD19  Назад в меню") // TODO ##regspec
+                                callData_registration, "\uD83D\uDD19  Назад в меню", callData_mainMenu)
                         protectedExecute(editMessageText)
                     }
 
                     callBackData == callData_addCommonClient -> {
                         val editMessageText = EditMessageText()
-                        val text = "\uD83D\uDD30 Введите фамилию клиента/пациента или ФИО полностью (например: Иванов Иван Иванович) и отправьте сообщение в чат. При необходимости, имя и отчество можно заменить символом -"
-                        editMessageText.putData(stringChatId, intMessageId, text)
-                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
+                        editMessageText.putData(stringChatId, intMessageId, text_inputSecondName)
+                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", callData_mainMenu)
                         protectedExecute(editMessageText)
-                        saveChatId[stringChatId] = 1
-                        tempData[stringChatId] = inputSecondName
+                        savedId[stringChatId] = 1
+                        tempData[stringChatId] = inputClientSecondName
                     }
 
-                    callBackData == "Работа с базой клиентов/пациентов" -> { // и редактировать данные
-                        val textForMessage = "\uD83D\uDD30 Чтобы найти клиента, с данными которого вы хотите работать, " +
-                        "нажмите клавишу с первой буквой фамилии клиента, либо введите фамилию целиком и отправьте сообщение в чат."
-                        val editMessageText = botMenuFunction.receiveFindClientKeyboard(stringChatId, intMessageId, textForMessage, callData_findClientForMenu)
+                    callBackData == callData_clientBaseMenu -> { // и редактировать данные
+                        val editMessageText = botMenuFunction.receiveFindClientKeyboard(stringChatId, intMessageId, text_findClient, callData_clientForSettingsMenu)
                         protectedExecute(editMessageText)
                     }
 
-                    callBackData == "Записать на приём" -> { // receiveFindClientKeyboard
-                        val textForMessage = "\uD83D\uDD30 Чтобы найти клиента для записи на приём, нажмите клавишу с первой буквой фамилии, или введите первую букву/несколько первых букв фамилии клиента и отправьте сообщение в чат."
-                        val editMessageText = botMenuFunction.receiveFindClientKeyboard(stringChatId, intMessageId, textForMessage, callData_findClientByName)
+                    callBackData == callData_setAppointment -> { // receiveFindClientKeyboard
+                        val editMessageText = botMenuFunction.receiveFindClientKeyboard(stringChatId, intMessageId, text_findClientToAppointment, callData_clientForAppointment)
                         protectedExecute(editMessageText)
                         tempData[stringChatId] = findClient
                     }
 
-                    callBackData == "⚙  Моя учетная запись" -> {
+                    callBackData ==  callData_myAccount -> {
                         val user: User = userRepository.findById(longChatId).get()
-                        val editMessageText: EditMessageText = botMenuFunction.receiveSettingsKeyboard(stringChatId, intMessageId, user)
+                        val editMessageText: EditMessageText = botMenuFunction.receiveUserSettingsMenu(stringChatId, intMessageId, user)
                         protectedExecute(editMessageText)
                     }
 
-                    callBackData.contains("Выписать клиента") -> {
-                        val clientId = callBackData.replace("Выписать клиента", "").toLong()
+                    callBackData.contains(callData_removeAppointment) -> {
+                        val clientId = callBackData.replace(callData_removeAppointment, "").toLong()
                         val editMessageText = EditMessageText()
-                        val text = "❗ Подтвердите, пожалуйста, отмену записи."
-                        editMessageText.putData(stringChatId, intMessageId, text)
-                        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  Отмена", "\uD83D\uDD19  Назад в меню", "Выписать клиента", "#cancapp$clientId")
+                        editMessageText.putData(stringChatId, intMessageId, text_cancelAppointment)
+                        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  Отмена", callData_mainMenu, "Выписать клиента", "$callData_cancelClientAppointment$clientId")
                         protectedExecute(editMessageText)
                     }
 
-                    callBackData.contains("Удалить клиента") -> {
-                        val clientId = callBackData.replace("Удалить клиента", "").toLong()
+                    callBackData.contains(callData_deleteClientMenu) -> {
+                        val clientId = callBackData.replace(callData_deleteClientMenu, "").toLong()
                         val editMessageText = EditMessageText()
-                        val text = "❗ Внимание: клиент/пациент будет безвозвратно удалён из базы данных. Подтвердите, пожалуйста, удаление."
-                        editMessageText.putData(stringChatId, intMessageId, text)
-                        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  Отмена", "\uD83D\uDD19  Назад в меню", "Удалить клиента", "#delcli$clientId")
+                        editMessageText.putData(stringChatId, intMessageId, text_delClient)
+                        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  Отмена", callData_mainMenu, "Удалить клиента", "$callData_deleteClient$clientId")
                         protectedExecute(editMessageText)
                     }
 
-                    callBackData.contains("#delcli") -> {
-                        val clientId = callBackData.replace("#delcli", "").toLong()
+                    callBackData.contains(callData_deleteClient) -> {
+                        val clientId = callBackData.replace(callData_deleteClient, "").toLong()
                         clientRepository.deleteById(clientId)
                         val editMessageText = EditMessageText()
-                        editMessageText.putData(stringChatId, intMessageId, "\uD83D\uDD30  Все данные клиента были удалены.")
-                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
+                        editMessageText.putData(stringChatId, intMessageId, text_deletedClient)
+                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", callData_mainMenu)
                         protectedExecute(editMessageText)
                     }
 
-                    callBackData.contains("#mydata") -> {
+                    callBackData.contains(callData_myData) -> {
                         val editMessageText = EditMessageText()
-                        editMessageText.putData(stringChatId, intMessageId, "\uD83D\uDD30  Раздел пользовательских данных. При необходимости, вы можете изменить свои ФИО, добавить пароль учетной записи, " +
-                                "чтобы в случае, если ваш аккаунт в Telegram изменится, восстановить доступ к учётной записи с нового аккаунта. Также, вы можете посмотреть собственную запись к специалисту, если вы сами являетесь" +
-                                "клиентом/пациентом специалиста.")
-                        val menuList = listOf("Редактировать мои ФИО", "Установить пароль", "Восстановить аккаунт", "Моя запись к специалисту", "\uD83D\uDD19  Назад в меню")
+                        editMessageText.putData(stringChatId, intMessageId, text_specialistMenu)
+                        val menuList = listOf(callData_editeUsername, callData_setPassword, callData_repairAccount, callData_appointmentToSpec, callData_mainMenu)
                         editMessageText.replyMarkup = botMenuFunction.createDataButtonSet(menuList, stringChatId)
                         protectedExecute(editMessageText)
                     }
 
-                    callBackData.contains("#support") -> {
+                    callBackData.contains(callData_messageToSupport) -> {
                         val editMessageText = EditMessageText()
-                        editMessageText.putData(stringChatId, intMessageId, "\uD83D\uDD30  Если вы столкнулись с проблемами в процессе использования приложения, опишите вашу проблему и отправьте сообщение в чат.")
-                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
+                        editMessageText.putData(stringChatId, intMessageId, text_messageToAdmin)
+                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", callData_mainMenu)
                         protectedExecute(editMessageText)
                         tempData[stringChatId] = inputSupportMessage
                     }
 
-                    callBackData.contains("#payment") -> {
+                    callBackData.contains(callData_paymentMenu) -> {
                         val editMessageText = EditMessageText().putData(stringChatId, intMessageId, "\uD83D\uDD30  Приложение находится на стадии бета-тестирования и в данный момент является бесплатным.")
-                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
+                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", callData_mainMenu)
                         protectedExecute(editMessageText)
                     }
 
-                    callBackData.contains("Восстановить аккаунт") -> {
+                    callBackData.contains(callData_repairAccount) -> {
                         val editMessageText = EditMessageText()
-                        editMessageText.putData(stringChatId, intMessageId, "\uD83D\uDD30  Введите пароль от вашей учётной записи и отправьте сообщение в чат.")
-                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Отмена", "\uD83D\uDD19  Назад в меню")
+                        editMessageText.putData(stringChatId, intMessageId, text_repairAccount)
+                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Отмена", callData_mainMenu)
                         protectedExecute(editMessageText)
                         tempData[stringChatId] = inputRepairPassword
                     }
 
-                    callBackData.contains("Редактировать мои ФИО") -> { // TODO м.б. == \contains
+                    callBackData.contains(callData_editeUsername) -> { // TODO м.б. == \contains
                         val editMessageText = EditMessageText()
-                        editMessageText.putData(stringChatId, intMessageId, "\uD83D\uDD30  Введите вашу фамилию или ФИО полностью (например: Иванов Иван Иванович) и отправьте сообщение в чат.")
-                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Отмена", "\uD83D\uDD19  Назад в меню")
+                        editMessageText.putData(stringChatId, intMessageId, text_inputName)
+                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Отмена", callData_mainMenu)
                         protectedExecute(editMessageText)
-                        tempData[stringChatId] = inputSecondName
+                        tempData[stringChatId] = inputUserSecondName
                     }
 
-                    callBackData == "#reg" -> {
+                    callBackData == callData_registration -> {
                         val editMessageText = EditMessageText()
-                        editMessageText.putData(stringChatId, intMessageId, "\uD83D\uDD30  Введите вашу фамилию или ФИО полностью (например: Иванов Иван Иванович) и отправьте сообщение в чат.")
-                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Отмена", "\uD83D\uDD19  Назад в меню")
+                        editMessageText.putData(stringChatId, intMessageId, text_inputName)
+                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Отмена", callData_mainMenu)
                         protectedExecute(editMessageText)
-                        tempData[stringChatId] = inputSecondName
+                        tempData[stringChatId] = inputUserSecondName
                     }
 
-                    callBackData == "#delmydata" -> {
-                        clientRepository.findAll().filter { it.specialistId == longChatId }.forEach { clientRepository.delete(it) }
-                        userRepository.deleteById(longChatId)
-                        val editMessageText = EditMessageText().putData(stringChatId, intMessageId, "\uD83D\uDD30  Все данные пользователя были удалены.")
+                    callBackData.contains(callData_delAllUserData) -> {
+                        val userIdData: String = callBackData.replace(callData_delAllUserData , "")
+                        val userChatId: Long = if (userIdData.isNotEmpty()) userIdData.toLong() else longChatId
+                        clientRepository.findAll().filter { it.specialistId == userChatId }.forEach { clientRepository.delete(it) }
+                        userRepository.deleteById(userChatId)
+                        val editMessageText = EditMessageText().putData(stringChatId, intMessageId, text_deletedAllUseData)
                         protectedExecute(editMessageText)
                    }
 
-                   callBackData.contains("#deluser") -> {
-                       val userId = callBackData.replace("#deluser", "").toLong()
+                    /*   callBackData.contains(callData_delUser) -> {
+                           val userId = callBackData.replace(callData_delUser , "").toLong()
+                           userRepository.deleteById(userId)
+                           val editMessageText = EditMessageText().putData(stringChatId, intMessageId, "\uD83D\uDD30  Все данные пользователя были удалены.")
+                           editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", callData_mainMenu)
+                           protectedExecute(editMessageText)
+                        } */
 
-                       userRepository.deleteById(userId)
-                       val editMessageText = EditMessageText().putData(stringChatId, intMessageId, "\uD83D\uDD30  Все данные пользователя были удалены.")
-                       editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
-                       protectedExecute(editMessageText)
-                    }
-
-                    callBackData.contains(callData_findClientByName) -> {
-                    val dataText = callBackData.replace(callData_findClientByName, "")
-                    //findClient(stringChatId, longChatId, dataText, callData_callBackClientId)
-                    sendFindClient(stringChatId, longChatId, dataText, callData_callBackClientId)
+                    callBackData.contains(callData_clientForAppointment) -> {
+                    val dataText = callBackData.replace(callData_clientForAppointment, "")
+                        protectedExecute(botMenuFunction.receiveFindClientMenu(saveMessageId[stringChatId] ?: 0,
+                        stringChatId, longChatId, dataText, callData_callBackClientId, clientRepository.findAll()))
                     tempData[stringChatId] = ""
                     }
 
-                    callBackData.contains(callData_findClientForMenu) -> {
-                        val dataText = callBackData.replace(callData_findClientForMenu, "")
-                        sendFindClient(stringChatId, longChatId, dataText, "#getmenu")
-                        //findClient(stringChatId, longChatId, dataText, "#getmenu")
+                    callBackData.contains(callData_clientForSettingsMenu) -> {
+                        val dataText = callBackData.replace(callData_clientForSettingsMenu, "")
+                        protectedExecute(botMenuFunction.receiveFindClientMenu(saveMessageId[stringChatId] ?: 0,
+                                stringChatId, longChatId, dataText, callData_clientSettingMenu, clientRepository.findAll()))
                     }
 
-                    callBackData.contains("#delmes") -> {
+                    callBackData.contains(callData_delMessage) -> {
                         val deleteMessage = DeleteMessage()
                         deleteMessage.putData(stringChatId, intMessageId)
                         protectedExecute(deleteMessage)
                     }
 
-
+                    callBackData.contains(callData_editeClientName) -> {
+                        val clientId = callBackData.replace(callData_editeClientName, "").toLong()
+                        val client = clientRepository.findById(clientId).get()
+                        val editMessageText = EditMessageText()
+                        editMessageText.putData(stringChatId, intMessageId, text_inputClientName)
+                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", callData_mainMenu)
+                        protectedExecute(editMessageText)
+                        savedId[stringChatId] = client.clientId
+                        tempData[stringChatId] = inputClientSecondName
+                    }
                 }
             }
         }
@@ -640,8 +607,8 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
 
     @Scheduled(cron = "0 0 23 * * *")
     fun actionEveryDayRepeat() {
-        saveHistoryOfAppointment()
-        removeClientsAppointment()
+        botMenuFunction.saveHistoryOfAppointment(clientRepository)
+        botMenuFunction.removeClientsAppointment(clientRepository)
     }
 
 
@@ -654,72 +621,15 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
     }
 
 
-
-    // TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    private fun sendFindClient(stringChatId: String, longChatId: Long, updateMessageText: String, callBackData: String){
-        println("TEST 1") // TODO
-        val savedMessageId: Int = saveStartMessageId[stringChatId] ?: 0
-        val editMessageText: EditMessageText = botMenuFunction.receiveFindClientMenu(savedMessageId, stringChatId,
-        longChatId, updateMessageText, callBackData, clientRepository.findAll())
-        protectedExecute(editMessageText)
-    }
-
-
-
-    private fun setFullName(stringChatId: String, longChatId: Long) {
-        if (saveChatId[stringChatId] != null && saveChatId[stringChatId]!! > 0) {
-                val client = ClientData()
-                client.chatId = saveChatId[stringChatId]!!
-                client.firstName = firstName[stringChatId]!!
-                client.secondName = secondName[stringChatId]!!
-                client.patronymic = patronymic[stringChatId]!!
-                client.specialistId = longChatId
-                client.visitAgreement = if (saveChatId[stringChatId]!! > 1) "❔" else qSym
-                clientRepository.save(client)
-
-            val editMessageText = EditMessageText().putData(stringChatId, saveStartMessageId[stringChatId]!!, "✅ Клиент добавлен в базу данных.")
-            editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню", "\uD83D\uDD19  Назад в меню")
-            protectedExecute(editMessageText)
-            saveChatId[stringChatId] = 0
-            registerPassword[stringChatId] = 0
-        } else {
-            val editMessageText = EditMessageText()
-            editMessageText.putData(stringChatId, saveStartMessageId[stringChatId]!!, "\uD83D\uDD30  Введите вашу специализацию (профессию) и отправьте сообщение в чат.")
-            editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Отмена", "\uD83D\uDD19  Назад в меню")
-            protectedExecute(editMessageText)
-            tempData[stringChatId] = inputProfession
-        }
-    }
-
-
-    private fun saveHistoryOfAppointment() {
-        val localDate = LocalDate.now()
-        val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
-
-        clientRepository.findAll().filter { localDate.minusDays(1).toString() == it.appointmentDate &&
-        it.visitAgreement != "✖"}.forEach { it.visitHistory = "${it.visitHistory}\n• ${formatter.format(localDate
-        .minusDays(1))} в ${it.appointmentTime}"; clientRepository.save(it) }
-    }
-
-
-    private fun removeClientsAppointment() {
-        val localDate = LocalDate.now()
-        clientRepository.findAll().filter { localDate.minusDays(1).toString() == it.appointmentDate &&
-        it.visitAgreement != "❔" && it.visitAgreement != qSym}.forEach { it.appointmentDate = "";
-        it.appointmentTime = ""; it.visitAgreement = "❔"; clientRepository.save(it) }
-    }
-
-
     private fun sendBackupToAdmin() {
         if(LocalTime.now().hour == config.createBackupTime){
             val admin: User? = userRepository.findAll().find { it.profession == config.adminUser }
-            val adminChatId = admin?.chatId ?: 0
+            val adminChatId: Long = admin?.chatId ?: 0
 
-            val userBackupMessage: SendDocument = botMessageFunction.sendBackup(adminChatId,
+            val userBackupMessage: SendDocument = botMenuFunction.sendBackup(adminChatId,
                     "ℹ  Файл User backup.", config.defaultDirectory + config.userBackupTitle)
             protectedExecute(userBackupMessage)
-
-            val clientBackupMessage: SendDocument = botMessageFunction.sendBackup(adminChatId,
+            val clientBackupMessage: SendDocument = botMenuFunction.sendBackup(adminChatId,
                     "ℹ  Файл ClientData backup.", config.defaultDirectory + config.clientBackupTitle)
             protectedExecute(clientBackupMessage)
         }
@@ -729,16 +639,13 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
     private fun createBackup() {
         if(LocalTime.now().hour == config.createBackupTime){
             val backupCreator = BackupCreator()
-            val userList = mutableListOf<String>()
-            val clientList = mutableListOf<String>()
+            val userList: List<String> = userRepository.findAll().flatMap { listOf(it.toString()) }
+            val clientList: List<String> = clientRepository.findAll().flatMap { listOf(it.toString()) }
 
-            userRepository.findAll().forEach { userList.add(it.toString()) }
-            clientRepository.findAll().forEach { clientList.add(it.toString()) }
-
-            val usersBackupFile = backupCreator.receiveBackupFile("users", userList)
+            val usersBackupFile: String = backupCreator.receiveBackupFile(config.userXmlGroupTitle, userList)
             backupCreator.createBackupXml(usersBackupFile, config.defaultDirectory + config.userBackupTitle)
 
-            val backupFile = backupCreator.receiveBackupFile("clients", clientList)
+            val backupFile = backupCreator.receiveBackupFile(config.clientXmlGroupTitle, clientList)
             backupCreator.createBackupXml(backupFile, config.defaultDirectory + config.clientBackupTitle)
         }
     }
@@ -750,40 +657,83 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
         val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
         val textFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
 
-        clientRepository.findAll().filter { it.appointmentDate.length == 10 && localDateTime.minusHours(12) == LocalDateTime.parse("${it.appointmentDate}T${it.appointmentTime}:00") }.forEach { it.appointmentDate = ""; it.appointmentTime = ""; it.visitAgreement = "❔"; clientRepository.save(it) }
+        clientRepository.findAll().filter { it.appointmentDate.length == 10 && localDateTime.minusHours(12) ==
+                LocalDateTime.parse("${it.appointmentDate}T${it.appointmentTime}:00") }.forEach { it.appointmentDate = "";
+            it.appointmentTime = ""; it.visitAgreement = "❔"; clientRepository.save(it) }
 
         for (user in userRepository.findAll()){
-            if (localTime.plusHours(user.timeZone).hour == user.sendTime) { // localTime.plusHours(user.timeZone).hour == user.sendTime      // in 0..24
-            for(client in clientRepository.findAll()){
-                if (client.specialistId == user.chatId && client.appointmentDate.length == 10) {
-                    if (dateFormatter.format(localDateTime.plusDays(user.sendBeforeDays).plusHours(user.timeZone)) == dateFormatter.format(LocalDate.parse(client.appointmentDate))){
-                        val sendMessage = SendMessage(client.chatId.toString(), "Здравствуйте, ${client.firstName} ${client.patronymic}, ${textFormatter.format(LocalDate.parse(client.appointmentDate))} в ${client.appointmentTime} у вас запланирован визит к специалисту: ${user.secondName} ${user.firstName} ${user.patronymic}. \nВы подтверждаете визит?")
-                        sendMessage.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("❌  Выписаться", "#disapp${user.chatId}#${client.clientId}", "✅  Подтвердить", "#approve${user.chatId}#${client.clientId}")
-                        protectedExecute(sendMessage)
+            if (localTime.plusHours(user.timeZone).hour == user.sendTime) {
+                for(client in clientRepository.findAll()){
+                    if (client.specialistId == user.chatId && client.appointmentDate.length == 10) {
+                        if (dateFormatter.format(localDateTime.plusDays(user.sendBeforeDays).plusHours(user.timeZone)) ==
+                                dateFormatter.format(LocalDate.parse(client.appointmentDate))){
+                            val sendMessage = SendMessage(client.chatId.toString(), "Здравствуйте, ${client.firstName} " +
+                                    "${client.patronymic}, ${textFormatter.format(LocalDate.parse(client.appointmentDate))} " +
+                                    "в ${client.appointmentTime} у вас запланирован визит к специалисту: ${user.getFullName()}. " +
+                                    "\nВы подтверждаете визит?")
+
+                            sendMessage.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("❌  Выписаться",
+                                    "$callData_cancelAppointment${user.chatId}#${client.clientId}", "✅  Подтвердить",
+                                    "$callData_approveAppointment${user.chatId}#${client.clientId}")
+                            protectedExecute(sendMessage)
+                        }
                     }
                 }
             }
-          }
         }
     }
 
 
-    fun backupClientServer(backupDirectory: String, longChatId: Long): Int {
-        val serverBackup = ServerBackup()
-        serverBackup.startBackup(backupDirectory)
-         val clientList = serverBackup.receiveClientsBackup(mutableListOf())//clientsDataList
-         clientList.forEach { clientRepository.save(it) }
-        return clientList.size//clientList.size
+    fun sendStartMessage(stringChatId: String, longChatId: Long) {
+        clientTemporaryData(stringChatId)
+        saveCommonUser(longChatId)
+
+        if (saveMessageId[stringChatId] != null) protectedExecute(DeleteMessage().putData(stringChatId, saveMessageId[stringChatId] ?: 0))
+        val user: User = userRepository.findById(longChatId).get()
+
+        when{
+            user.secondName.isEmpty() -> {
+                saveMessageId[stringChatId] = protectedExecute(botMenuFunction.receiveClientMessage(stringChatId))
+            }
+            user.profession == config.adminUser -> {
+                saveMessageId[stringChatId] = protectedExecute(botMenuFunction.receiveAdministratorSendMessage(stringChatId, textForStartMessage,
+                        saveMessageId.size, userRepository.findAll(), clientRepository.findAll()))
+            }
+            else -> {
+                val sendMessage: SendMessage = botMenuFunction.receiveSpecialistSendMessage(longChatId, stringChatId,
+                        textForStartMessage, clientRepository.findAll())
+                saveMessageId[stringChatId] = protectedExecute(sendMessage)
+            }
+        }
     }
 
 
-    fun uploadServers(longChatId: Long, stringChatId: String, backupDirectory: String) {
+    fun sendEditStartMessage(stringChatId: String, longChatId: Long, intMessageId: Int) {
+        val user: User = userRepository.findById(longChatId).get()
+
+        when{
+            user.secondName.isEmpty() -> {
+                protectedExecute(botMenuFunction.receiveClientEditMessage (stringChatId, intMessageId))
+            }
+            user.profession == config.adminUser -> {
+                saveMessageId[stringChatId] = protectedExecute(botMenuFunction.receiveAdministratorSendMessage(stringChatId,
+                        textForStartMessage, saveMessageId.size, userRepository.findAll(), clientRepository.findAll()))
+            }
+            else -> {
+                val editMessageText: EditMessageText = botMenuFunction.receiveSpecialistEditMessage(longChatId,
+                        stringChatId, intMessageId, textForStartMessage, clientRepository.findAll())
+                protectedExecute(editMessageText)
+            }
+        }
+    }
+
+
+    fun uploadServerToChat(longChatId: Long, stringChatId: String, backupDirectory: String) {
         tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
-        val userBackupMessage: SendDocument = botMessageFunction.sendBackup(longChatId,
+        val userBackupMessage: SendDocument = botMenuFunction.sendBackup(longChatId,
             "ℹ  Файл User backup.", backupDirectory + config.userBackupTitle)
         protectedExecute(userBackupMessage)
-
-        val clientBackupMessage: SendDocument = botMessageFunction.sendBackup(longChatId,
+        val clientBackupMessage: SendDocument = botMenuFunction.sendBackup(longChatId,
             "ℹ  Файл ClientData backup.", backupDirectory + config.clientBackupTitle)
         protectedExecute(clientBackupMessage)
     }
@@ -793,938 +743,205 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
         tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
         if (updateMessageText.length > 3) {
             for (user in userRepository.findAll()){
-                val sendMessage = SendMessage(user.chatId.toString(), "ℹ  Сообщение от администратора:\n$updateMessageText")
-                sendMessage.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD835\uDC0E\uD835\uDC0A", "#delmes")
+                val sendMessage = SendMessage(user.chatId.toString(), "$text_fromAdminMessage\n$updateMessageText")
+                sendMessage.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD835\uDC0E\uD835\uDC0A", callData_delMessage)
                 protectedExecute(sendMessage)
             }
         } else {
-            val sendMessage = SendMessage(stringChatId, "ℹ  Сообщение от администратора не было отправлено.")
-            sendMessage.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD835\uDC0E\uD835\uDC0A", "#delmes")
+            val sendMessage = SendMessage(stringChatId, text_fromAdminMessageNotSend )
+            sendMessage.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD835\uDC0E\uD835\uDC0A", callData_delMessage)
             protectedExecute(sendMessage)
         }
     }
 
 
-    fun changeUserData(updateMessageText: String, stringChatId: String) {
-        tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
-        val changeData = updateMessageText.split("#")
-        val editMessageText = EditMessageText()
-        val savedMessageId: Int = saveStartMessageId[stringChatId] ?: 0
-
-        if (changeData.size !in 10..11) {
-            editMessageText.putData(stringChatId, savedMessageId, "\uD83D\uDD30  Ошибка ввода данных")
-        } else {
-            val newUser = userRepository.findById(changeData[4].toLong()).get()
-            newUser.secondName = changeData[0]
-            newUser.firstName = changeData[1]
-            newUser.patronymic = changeData[2]
-            newUser.profession = changeData[3]
-            newUser.password = changeData[5]
-            newUser.sendTime = changeData[6].toInt()
-            newUser.timeZone = changeData[7].toLong()
-            newUser.sendBeforeDays = changeData[8].toLong()
-            newUser.paymentDate = changeData[9]
-            newUser.chatId = if (changeData.size == 11) changeData[10].toLong() else changeData[4].toLong()
-            userRepository.save(newUser)
-
-            val user = userRepository.findById(changeData[4].toLong()).get()
-            val textForMessage = "\uD83D\uDD30  Новые данные пользователя: " +
-                    "\nФамилия: ${user.secondName}\nИмя: ${user.firstName}\nОтчество: ${user.patronymic}\nПрофессия: ${user.profession}" +
-                    "\nChat id: ${user.chatId}\nПароль: ${user.password}\nВремя отправки сообщений клиенту: ${user.sendTime}\nВременная зона: ${user.timeZone}" +
-                    "\nОтправка сообщений за дней до приема: ${user.sendBeforeDays}\nДата абонентского платежа: ${user.paymentDate}"
-
-            editMessageText.putData(stringChatId, savedMessageId, textForMessage)
-            editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
-        }
-        protectedExecute(editMessageText)
-    }
-
-
-    fun putBackupToServer(stringChatId: String, longChatId: Long, directory: String, backupTitle: String) {
-        tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
-        val backupDirectory = directory + backupTitle
-        val clientAmount: Int = backupClientServer(backupDirectory, longChatId)
-        val textForMessage = "\uD83D\uDD30  Добавлено элементов: $clientAmount\nBackup установленный в сервер получен из директории:\n$backupDirectory"
-        val savedMessageId: Int = saveStartMessageId[stringChatId] ?: 0
-        protectedExecute(botMessageFunction.backupServer(textForMessage, stringChatId, savedMessageId))
-    }
-
-
-
-    fun createBackupInDirectory(stringChatId: String, savedGroupTitle: String, directory: String, backupTitle: String, savedGroupList: List<String>) {
-        tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
-    val backupDirectory = directory + backupTitle
-    val backupCreator = BackupCreator()
-    val backupFile = backupCreator.receiveBackupFile(savedGroupTitle, savedGroupList)
-    backupCreator.createBackupXml(backupFile, backupDirectory)
-    val textForMessage = "\uD83D\uDD30  Backup-файл данных <$savedGroupTitle> создан в директории:\n$backupDirectory"
-
-    val savedMessageId: Int = saveStartMessageId[stringChatId] ?: 0
-    val editMessageText = EditMessageText()
-    editMessageText.putData(stringChatId, savedMessageId, textForMessage)
-    editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню", "В backup меню", "Backup меню")
-    protectedExecute(editMessageText)
-    }
-
-
     fun sendMessageForUser(stringChatId: String, updateMessageText: String) {
-        tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
-    val splitMessageText = updateMessageText.split("#")
-    val sendMessage = SendMessage(splitMessageText[0], splitMessageText[1])
-    sendMessage.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD835\uDC0E\uD835\uDC0A", "#delmes")
-    protectedExecute(sendMessage)
-    val savedMessageId: Int = saveStartMessageId[stringChatId] ?: 0
-    val editMessageText = EditMessageText().putData(stringChatId, savedMessageId, "\uD83D\uDD30  Сообщение было отправлено пользователю.")
-    editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
-    protectedExecute(editMessageText)
+        protectedExecute(botMenuFunction.sendMessageToUser(updateMessageText))
+        protectedExecute(botMenuFunction.sendMessageToAdminNotification(stringChatId, saveMessageId[stringChatId] ?: 0))
     }
-
 
 
     fun setTextIntoStartMessage(stringChatId: String, updateMessageText: String) {
         tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
-    textForStartMessage = if (updateMessageText.length > 3) "$updateMessageText\n\n" else ""
-    val savedMessageId: Int = saveStartMessageId[stringChatId] ?: 0
-    val editMessageText = EditMessageText().putData(stringChatId, savedMessageId, "\uD83D\uDD30  Сообщение для StartMessage: $textForStartMessage")
-    editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
-    protectedExecute(editMessageText)
-    }
-
-    fun messageForSupport(stringChatId: String, longChatId: Long, updateMessageText: String) {
-    val adminId = userRepository.findAll().first { it.profession == config.adminUser }
-    val user = userRepository.findById(longChatId).get()
-    protectedExecute(SendMessage(adminId!!.chatId.toString(), "< Обращение в техническую поддержку >\nОт пользователя: $user\nСообщение: $updateMessageText"))
-    val savedMessageId: Int = saveStartMessageId[stringChatId] ?: 0
-    val editMessageText = EditMessageText().putData(stringChatId, savedMessageId, "Сообщение было отправлено в чат поддержки.")
-    editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
-    protectedExecute(editMessageText)
+        textForStartMessage = if (updateMessageText.length > 3) "$updateMessageText\n\n" else ""
+        val savedMessageId: Int = saveMessageId[stringChatId] ?: 0
+        val editMessageText = EditMessageText().putData(stringChatId, savedMessageId,
+                "$text_forStartMessage$textForStartMessage")
+        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню",
+                "\uD83D\uDD19  Назад в меню")
+        protectedExecute(editMessageText)
     }
 
 
-    fun repairAccount(stringChatId: String, longChatId: Long, updateMessageText: String) {
-        tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
-    val oldUser: User
-    val user = userRepository.findById(longChatId).get()
-    val users = userRepository.findAll().filter { it.chatId != user.chatId && it.password == updateMessageText && it.secondName == user.secondName && it.firstName == user.firstName && it.patronymic == user.patronymic }
-    val editMessageText = EditMessageText()
-    val savedMessageId: Int = saveStartMessageId[stringChatId] ?: 0
-
-    if (users.isNotEmpty() && users.size == 1) {
-        oldUser = users[0]
-        clientRepository.findAll().filter { it.specialistId == oldUser.chatId }.forEach { it.specialistId = longChatId; clientRepository.save(it) }
-        user.password = oldUser.password
-        userRepository.save(user)
-        userRepository.delete(oldUser)
-
-        editMessageText.putData(stringChatId, savedMessageId, "✅  Аккаунт восстановлен")
-        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
-    } else {
-        editMessageText.putData(stringChatId, savedMessageId, "❌  Ошибка")
-        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
-    }
-    protectedExecute(editMessageText)
-    }
-
-
-    fun setUserPassword(stringChatId: String, longChatId: Long, updateMessageText: String) {
-        tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
-    val editMessageText = EditMessageText()
-    val savedMessageId: Int = saveStartMessageId[stringChatId] ?: 0
-
-    if (updateMessageText.length in 5..15) {
+    fun sendMessageForSupport(stringChatId: String, longChatId: Long, updateMessageText: String) {
+        val adminId = userRepository.findAll().first { it.profession == config.adminUser }
         val user = userRepository.findById(longChatId).get()
-        user.password = updateMessageText
-        userRepository.save(user)
-        editMessageText.putData(stringChatId, savedMessageId, "✅️Пароль $updateMessageText был установлен.")
-    } else {
-        editMessageText.putData(stringChatId, savedMessageId, "❌  Недопустимая длинна пароля $updateMessageText\nПароль не был установлен.")
-    }
-    editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
-    protectedExecute(editMessageText)
-    }
-
-
-    fun inputOldUserPassword(stringChatId: String, longChatId: Long, updateMessageText: String) {
-        tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
-    val user = userRepository.findById(longChatId).get()
-    val editMessageText = EditMessageText()
-    val savedMessageId: Int = saveStartMessageId[stringChatId] ?: 0
-
-    if (updateMessageText == user.password) {
-        tempData[stringChatId] = inputPassword
-        editMessageText.putData(stringChatId, savedMessageId, "✅  Пароль подтверждён, введите новый пароль и отправьте сообщение в чат. Помните о том, что длинна пароля должна быть не менее 5 и не более 15 символов.")
-    } else {
-        editMessageText.putData(stringChatId, savedMessageId, "❌  Ошибка")
-    }
-    editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
-    protectedExecute(editMessageText)
-    }
-
-
-    fun addClientRemark(stringChatId: String, updateMessageText: String) {
-        tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
-    val client = clientRepository.findById(saveChatId[stringChatId]!!).get()
-    val editMessageText = EditMessageText()
-    val savedMessageId: Int = saveStartMessageId[stringChatId] ?: 0
-
-    if (client.remark.length < 3000) {
-        val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
-
-        val remarkText = if (client.remark.isNotEmpty()) {
-            "${client.remark}\n• ${formatter.format(LocalDate.now())}:  $updateMessageText"
-        } else {
-            "• ${formatter.format(LocalDate.now())}:  $updateMessageText"
-        }
-
-        client.remark = remarkText
-        clientRepository.save(client)
-
-        editMessageText.putData(stringChatId, savedMessageId, "\uD83D\uDCDD Заметки:\n${client.remark}\n\n\uD83D\uDD30  Заметка была добавлена.")
-    } else {
-        editMessageText.putData(stringChatId, savedMessageId, "\uD83D\uDCDD Заметки:\n${client.remark}\n\nℹ  Достигнут максимальный размер записи, заметка не была добавлена.")
-    }
-    editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
-    protectedExecute(editMessageText)
-    }
-
-
-    fun inputUserName(stringChatId: String, longChatId: Long, updateMessageText: String) {
-        tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
-    val editMessageText = EditMessageText()
-    val savedMessageId: Int = saveStartMessageId[stringChatId] ?: 0
-
-    if (updateMessageText.split(" ").size == 3) {
-        val splitUpdateMessage = updateMessageText.split(" ")
-        val secondNameText = splitUpdateMessage[0].replace(".", "").replace("Ё", "Е").trim()
-        val firstNameText = splitUpdateMessage[1].replace(".", "").trim()
-        val patronymicText = splitUpdateMessage[2].replace(".", "").trim()
-
-        if (secondNameText.length > 14 || firstNameText.length > 14 || patronymicText.length > 14) {
-            registerPassword[stringChatId] = 0
-            editMessageText.putData(stringChatId, savedMessageId, "ℹ  Превышена максимальная длина фамилии, имени, или отчества. Для корректной работы приложения необходимо сократить количество символов в ФИО.")
-            editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню", "\uD83D\uDD19  Назад в меню")
-            protectedExecute(editMessageText)
-        } else {
-            val client = clientRepository.findAll().filter { it.specialistId == longChatId && it.secondName == secondNameText && it.firstName == firstNameText && it.patronymic == patronymicText }
-            secondName[stringChatId] = secondNameText
-            firstName[stringChatId] = firstNameText
-            patronymic[stringChatId] = patronymicText
-
-            if (client.isEmpty()) {
-                setFullName(stringChatId, longChatId)
-            } else {
-                editMessageText.putData(stringChatId, savedMessageId, "ℹ  У вас уже добавлен клиент с ФИО $secondNameText $firstNameText $patronymicText. Продолжить регистрацию нового клиента с совпадающими ФИО?")
-                editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  Отмена", "\uD83D\uDD19  Назад в меню", "Зарегистрировать", "#acceptregister")
-                protectedExecute(editMessageText)
-            }
-        }
-    } else {
-        val secondNameText = updateMessageText.replace("Ё", "Е").replace("ё", "Е").trim()
-
-        if (secondNameText.length > 14) {
-            registerPassword[stringChatId] = 0
-            editMessageText.putData(stringChatId, savedMessageId, "ℹ  Превышена максимальная длина фамилии. Для корректной работы приложения необходимо сократить количество символов в ФИО.")
-            editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню", "\uD83D\uDD19  Назад в меню")
-            protectedExecute(editMessageText)
-        } else {
-            secondName[stringChatId] = secondNameText
-            editMessageText.putData(stringChatId, savedMessageId, "\uD83D\uDD30  Введите имя и отправьте сообщение в чат. Если ввод имени не требуется, можно заменить его символом -")
-            editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Отмена", "\uD83D\uDD19  Назад в меню")
-            protectedExecute(editMessageText)
-            tempData[stringChatId] = inputFirstName
-        }
-    }
+        protectedExecute(SendMessage(adminId!!.chatId.toString(), "$text_support$user\n$updateMessageText"))
+        val savedMessageId: Int = saveMessageId[stringChatId] ?: 0
+        val editMessageText = EditMessageText().putData(stringChatId, savedMessageId, text_forSupportSent)
+        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню",
+                callData_mainMenu)
+        protectedExecute(editMessageText)
     }
 
 
     fun setFirstname(stringChatId: String, updateMessageText: String) {
         tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
-    val firstNameText = updateMessageText.replace(".", "").trim()
-    val editMessageText = EditMessageText()
-    val savedMessageId: Int = saveStartMessageId[stringChatId] ?: 0
+        val firstNameText = updateMessageText.replace(".", "").trim()
+        val editMessageText = EditMessageText()
+        val savedMessageId: Int = saveMessageId[stringChatId] ?: 0
 
-    if (firstNameText.length > 14) {
-        registerPassword[stringChatId] = 0
-        editMessageText.putData(stringChatId, savedMessageId, "ℹ  Превышена максимальная длина имени. Для корректной работы приложения необходимо сократить количество символов в ФИО.")
-    } else {
-        firstName[stringChatId] = firstNameText
-        editMessageText.putData(stringChatId, savedMessageId, "\uD83D\uDD30  Введите отчество и отправьте сообщение в чат. Если ввод отчества не требуется, можно заменить его символом -")
-        tempData[stringChatId] = inputPatronymic
-    }
-    editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Отмена", "\uD83D\uDD19  Назад в меню")
-    protectedExecute(editMessageText)
+        if (firstNameText.length > 15) {
+            registerPassword[stringChatId] = 0
+            editMessageText.putData(stringChatId, savedMessageId, text_nameTooLong)
+        } else {
+            firstName[stringChatId] = firstNameText
+            editMessageText.putData(stringChatId, savedMessageId, text_inputPatronymic)
+            tempData[stringChatId] = inputPatronymic
+        }
+        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Отмена", callData_mainMenu)
+        protectedExecute(editMessageText)
     }
 
 
     fun setPatronymic(stringChatId: String, longChatId: Long, updateMessageText: String) {
         tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
-    val patronymicText = updateMessageText.replace(".", "").trim()
-    val savedMessageId: Int = saveStartMessageId[stringChatId] ?: 0
+        val patronymicText = updateMessageText.replace(".", "").trim()
+        val savedMessageId: Int = saveMessageId[stringChatId] ?: 0
 
-    if (patronymicText.length > 14) {
-        registerPassword[stringChatId] = 0
-        val editMessageText = EditMessageText().putData(stringChatId, savedMessageId, "ℹ  Превышена максимальная длина отчества. Для корректной работы приложения необходимо сократить количество символов в ФИО.")
-        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню", "\uD83D\uDD19  Назад в меню")
-        protectedExecute(editMessageText)
-    } else {
-        patronymic[stringChatId] = patronymicText
-        setFullName(stringChatId, longChatId)
+        if (patronymicText.length > 15) {
+            registerPassword[stringChatId] = 0
+            val editMessageText = EditMessageText().putData(stringChatId, savedMessageId, text_tooLongPatronymic)
+            editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню", callData_mainMenu)
+            protectedExecute(editMessageText)
+        } else {
+            patronymic[stringChatId] = patronymicText
+            setFullNameInDb(stringChatId, longChatId)
+        }
     }
-    }
 
 
-    fun setProfession(stringChatId: String, longChatId: Long, updateMessageText: String) {
+    fun setUserDataInDB(stringChatId: String, longChatId: Long, updateMessageText: String) {
         tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
-    val admin: User? = userRepository.findAll().find { it.profession == config.adminUser }
-    val user: User = userRepository.findById(longChatId).get()
-    val editMessageText = EditMessageText()
-    val savedMessageId: Int = saveStartMessageId[stringChatId] ?: 0
+        val admin: User? = userRepository.findAll().find { it.profession == config.adminUser }
+        val user: User = userRepository.findById(longChatId).get()
+        val editMessageText = EditMessageText()
+        val savedMessageId: Int = saveMessageId[stringChatId] ?: 0
 
-    if (updateMessageText == config.adminUser && admin != null || updateMessageText.length > 20) {
-        editMessageText.putData(stringChatId, saveStartMessageId[stringChatId]!!, "❌ Пожалуйста, выберите другое название специальности.")
-    } else {
-        val date = LocalDate.now()
-        val nextPaymentDate = date.plusMonths(3)
+        if (updateMessageText == config.adminUser && admin != null || updateMessageText.length > 20) {
+            editMessageText.putData(stringChatId, saveMessageId[stringChatId]!!, text_wrongProfession)
+        } else {
+            val date = LocalDate.now()
+            val nextPaymentDate = date.plusMonths(3)
 
-        user.firstName = firstName[stringChatId]!!
-        user.secondName = secondName[stringChatId]!!
-        user.patronymic = patronymic[stringChatId]!!
-        user.profession = updateMessageText.lowercase()
-        user.paymentDate = nextPaymentDate.toString()
-        userRepository.save(user)
-
-        editMessageText.putData(stringChatId, savedMessageId, "✅ Спасибо за регистрацию!")
-    }
-    editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
-    protectedExecute(editMessageText)
+            user.firstName = firstName[stringChatId]!!
+            user.secondName = secondName[stringChatId]!!
+            user.patronymic = patronymic[stringChatId]!!
+            user.profession = updateMessageText.lowercase()
+            user.paymentDate = nextPaymentDate.toString()
+            userRepository.save(user)
+            editMessageText.putData(stringChatId, savedMessageId, text_thanks)
+        }
+        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", callData_mainMenu)
+        protectedExecute(editMessageText)
     }
 
 
     fun registerClientByPassword(stringChatId: String, longChatId: Long, intMessageId: Int, updateMessageText: String) {
-    if (registerPassword.isNotEmpty()){
-        for ((key, value) in registerPassword){
-            if(value.toString() == updateMessageText) {
-                protectedExecute(DeleteMessage().putData(stringChatId, intMessageId))
-                val sendMessage = SendMessage(stringChatId,  "✅ Код принят, спасибо!")
-                sendMessage.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD835\uDC0E\uD835\uDC0A", "#delmes")
-                protectedExecute(sendMessage)
+        if (registerPassword.isNotEmpty()){
+            for ((key, value) in registerPassword){
+                if(value.toString() == updateMessageText) {
+                    protectedExecute(DeleteMessage().putData(stringChatId, intMessageId))
+                    val sendMessage = SendMessage(stringChatId,  text_passwordOk)
+                    sendMessage.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD835\uDC0E\uD835\uDC0A", callData_delMessage)
+                    protectedExecute(sendMessage)
 
-                val editMessageText = EditMessageText()
-                val textForMessage: String
+                    val savedMessageId: Int = saveMessageId[key] ?: 0
+                    val editMessageText = EditMessageText()
+                    val textForMessage: String
 
-                if (saveClientId[key].isNullOrEmpty()) {
-                    textForMessage = "✅ Код был подтверждён, осталось заполнить ФИО и регистрация будет завершена. Введите, пожалуйста, фамилию клиента или ФИО полностью (например: Иванов Иван Иванович) и отправьте сообщение в чат."
-                    editMessageText.putData(key, saveStartMessageId[key]!!, textForMessage)
-                    editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Отмена", "\uD83D\uDD19  Назад в меню")
-                    tempData[key] = inputSecondName
-                    saveChatId[key] = longChatId
-                } else {
-                    val clientId = saveClientId[key]!!.toLong()
-                    val client = clientRepository.findById(clientId).get()
-                    client.chatId = longChatId
-                    clientRepository.save(client)
+                    if (clientIdExistCheck[key].isNullOrEmpty()) { // этот блок для регистрации нового клиента, которого ещё нет в базе
+                        editMessageText.putData(key, savedMessageId, text_passwordApprove)
+                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Отмена", callData_mainMenu)
+                        tempData[key] = inputClientSecondName
+                        savedId[key] = longChatId
+                    } else {
+                        val clientId = clientIdExistCheck[key]!!.toLong()
+                        val client = clientRepository.findById(clientId).get()
+                        client.chatId = longChatId
+                        clientRepository.save(client)
 
-                    textForMessage = "✅ Код был подтверждён, теперь перед предстоящим приёмом клиенту буду приходить сообщения с просьбой подтвердить посещение."
-                    editMessageText.putData(key, saveStartMessageId[key]!!, textForMessage)
-                    editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню", "\uD83D\uDD19  Назад в меню")
-                    saveClientId[key] = ""
+                        editMessageText.putData(key, savedMessageId, text_passwordClientApprove)
+                        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню", callData_mainMenu)
+                        clientIdExistCheck[key] = ""
+                    }
+                    protectedExecute(editMessageText)
+
+                    if (registerPassword.size == 1) registerPassword.clear() else registerPassword[key] = 0
+                    return
                 }
-                protectedExecute(editMessageText)
-
-                if (registerPassword.size == 1) registerPassword.clear() else registerPassword[key] = 0
-                return
             }
         }
     }
-    }
 
-
-    fun schedule(stringChatId: String, longChatId: Long, updateMessageText: String, month: String) {
-        tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
-    val dataText: String = updateMessageText.replace(" :", "").replace(":", " ").replace(", ", " ").replace(",", " ").replace(".", "").replace(" в", "").replace(" часов", "").replace(" на", "").trim()
-    val splitText: List<String> = dataText.split(" ")
-    val clientSecondName: String = splitText[0]
-    val localDate = LocalDate.now()
-    val formatter = DateTimeFormatter.ofPattern("yyyy")
-
-    val clients = clientRepository.findAll().filter { it.specialistId == longChatId && it.secondName.contains(clientSecondName, true) }
-
-    var textForMessage = "ℹ  "
-    val editMessageText = EditMessageText()
-    var day = 0
-    var hour = 0
-    var minute = 0
-    val date: String
-
-    try{
-        day = splitText[1].replace(" 0", "").toInt()
-        hour = splitText[3].replace(" 0", "").toInt()
-        minute = splitText[4].replace(" 0", "").toInt()
-    } catch (e: NumberFormatException){
-        textForMessage = "$textForMessage ошибка ввода даты-времени или"
-    }
-
-    val stringMinute: String = if (minute < 10 ) "0$minute" else "$minute"
-    val stringHour: String = if (hour < 10 ) "0$hour" else "$hour"
-
-    if(clients.isEmpty() || day == 0 || hour == 0 || (minute == 0 && splitText[4] != stringMinute)){
-        textForMessage = "$textForMessage ошибка ввода фамилии клиента"
-        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Отмена", "\uD83D\uDD19  Назад в меню")
-    } else {
-        val year = if (localDate.month.value <= month.replace(" 0", "").toInt()) {
-            formatter.format(localDate).toInt()
-        } else {
-            formatter.format(localDate).toInt() + 1
-        }
-
-        date = if (day < 10) "$year-${month.replace(" ", "")}-0$day" else "$year-${month.replace(" ", "")}-$day"
-
-        textForMessage = "\uD83D\uDD30 Вы можете записать на $day ${splitText[2]} в $hour:$stringMinute пациента:"
-
-        val inlineKeyboardMarkup = InlineKeyboardMarkup()
-        val rowsInline = ArrayList<List<InlineKeyboardButton>>()
-        for (elem in clients) {
-            val rowInlineButton = ArrayList<InlineKeyboardButton>()
-            val button = InlineKeyboardButton()
-            button.putData("${elem.secondName} ${elem.firstName} ${elem.patronymic}", "$callData_clientData${elem.clientId}#$date#$stringHour:$stringMinute")
-            rowInlineButton.add(button)
-            rowsInline.add(rowInlineButton)
-        }
-
-        val rowInlineButton = ArrayList<InlineKeyboardButton>()
-        val returnButton = InlineKeyboardButton()
-        returnButton.putData("\uD83D\uDD19  Отмена", "\uD83D\uDD19  Назад в меню")
-        rowInlineButton.add(returnButton)
-        rowsInline.add(rowInlineButton)
-
-        inlineKeyboardMarkup.keyboard = rowsInline
-        editMessageText.replyMarkup = inlineKeyboardMarkup
-    }
-    editMessageText.putData(stringChatId, saveStartMessageId[stringChatId]!!, textForMessage)
-    protectedExecute(editMessageText)
-    }
-
-
-    fun setSecondname(stringChatId: String, longChatId: Long, updateMessageText: String) { // TODO setSecondname
-        tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
-    val splitUpdateMessage = updateMessageText.split(" ")
-    val secondNameText = splitUpdateMessage[0].replace(".", "").replace("Ё", "Е").trim()
-    val firstNameText = splitUpdateMessage[1].replace(".", "").trim()
-    val patronymicText = splitUpdateMessage[2].replace(".", "").trim()
-
-    if (secondNameText.length > 14 || firstNameText.length > 14 || patronymicText.length > 14){
-        val editMessageText = EditMessageText().putData(stringChatId, saveStartMessageId[stringChatId]!!, "ℹ  Превышена максимальная длинна фамилии, имени, или отчества. Для корректной работы приложения необходимо сократить количество символов в ФИО.")
-        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню", "\uD83D\uDD19  Назад в меню")
-        protectedExecute(editMessageText)
-    } else {
-        val client = clientRepository.findAll().filter { it.specialistId == longChatId && it.secondName == secondNameText && it.firstName == firstNameText && it.patronymic == patronymicText }
-        secondName[stringChatId] = secondNameText
-        firstName[stringChatId] = firstNameText
-        patronymic[stringChatId] = patronymicText
-        saveChatId[stringChatId] = 1
-
-        if (client.isEmpty()){
-            setFullName(stringChatId, longChatId)
-        } else {
-            val editMessageText = EditMessageText().putData(stringChatId, saveStartMessageId[stringChatId]!!, "ℹ  У вас уже добавлен клиент с ФИО $secondNameText $firstNameText $patronymicText. Продолжить регистрацию нового клиента с совпадающими ФИО?")
-            editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  Отмена", "\uD83D\uDD19  Назад в меню", "Зарегистрировать", "#acceptregister")
-            protectedExecute(editMessageText)
-        }
-    }
-    }
-
-    fun searchClient(stringChatId: String, longChatId: Long, updateMessageText: String) {
-    val clients = clientRepository.findAll().filter { cli -> cli.specialistId == longChatId && cli.secondName.contains(updateMessageText, true) }
-    val textForMessage: String
-    val editMessageText = EditMessageText()
-
-    if(clients.isEmpty()){
-        textForMessage = "ℹ  Клиента с таким набором символов в фамилии не найдено."
-        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Отмена", "\uD83D\uDD19  Назад в меню")
-    } else {
-        textForMessage = "\uD83D\uDD30 Выберите клиента/пациента из списка ниже:"
-        val inlineKeyboardMarkup = InlineKeyboardMarkup()
-        val rowsInline = ArrayList<List<InlineKeyboardButton>>()
-        for (elem in clients) {
-            val rowInlineButton = ArrayList<InlineKeyboardButton>()
-            val button = InlineKeyboardButton()
-            button.putData(elem.secondName + " " +  elem.firstName, "#clid" + elem.clientId)
-            rowInlineButton.add(button)
-            rowsInline.add(rowInlineButton)
-        }
-
-        val rowInlineButton = ArrayList<InlineKeyboardButton>()
-        val returnButton = InlineKeyboardButton()
-        returnButton.putData("\uD83D\uDD19  Отмена", "\uD83D\uDD19  Назад в меню")
-        rowInlineButton.add(returnButton)
-        rowsInline.add(rowInlineButton)
-
-        inlineKeyboardMarkup.keyboard = rowsInline
-        editMessageText.replyMarkup = inlineKeyboardMarkup
-    }
-
-    editMessageText.putData(stringChatId, saveStartMessageId[stringChatId]!!, textForMessage)
-    protectedExecute(editMessageText)
-    }
-
-
-    fun sendStartMessage(stringChatId: String, longChatId: Long) {
-        cleanTemporaryData(stringChatId)
-        saveCommonUser(longChatId)
-
-    if (saveStartMessageId[stringChatId] != null) protectedExecute(DeleteMessage().putData(stringChatId, saveStartMessageId[stringChatId]!!))
-
-    val user: User = userRepository.findById(longChatId).get()
-
-    if (user.firstName.isEmpty()){
-        val sendMessage = SendMessage(stringChatId, "Здравствуйте, уважаемый пользователь! Здесь вы можете получать информацию о предстоящем визите к своему специалисту. Для этого, если вам был сообщён короткий код, введите его и отправьте сообщение в чат.")
-        val settingList = listOf("\uD83D\uDCC5  Посмотреть мою запись", "Зарегистрироваться как специалист")
-        sendMessage.replyMarkup = botMenuFunction.createButtonSet(settingList)
-        saveStartMessageId[stringChatId] = protectedExecute(sendMessage)
-    } else {
-        if (user.profession == config.adminUser) {
-            val users = userRepository.findAll()
-            val specialists = users.filter { it.profession.isNotEmpty() }
-            val clients = clientRepository.findAll()
-
-            val textForMessage = "$textForStartMessage\uD83D\uDD30  Меню администратора.\nВсего пользователей: ${users.count()}" +
-                    "\nВсего специалистов: ${specialists.count() - 1}\nДобавлено клиентов: ${clients.count()}\nВсего стартовых сообщений: ${saveStartMessageId.size}"
-            val sendMessage = SendMessage(stringChatId, textForMessage)
-            val settingList = listOf("Редактировать пользователя", "Сообщение всем пользователям", "Сообщение пользователю", "StartMessage текст", "Меню специалиста", "Очистить чат", "Backup меню")
-            sendMessage.replyMarkup = botMenuFunction.createButtonSet(settingList)
-            saveStartMessageId[stringChatId] = protectedExecute(sendMessage)
-        } else {
-            var textForMessageLength: Int
-            val localDate = LocalDate.now()
-            val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
-            val textForMessage = StringBuilder()
-            val nextDate: String? = clientRepository.findAll().filter { it.specialistId == longChatId && it.appointmentDate.length == 10 && localDate.isBefore(LocalDate.parse(it.appointmentDate)) }.minByOrNull { it.appointmentDate }?.appointmentDate
-
-            if (nextDate.isNullOrEmpty()) {
-                textForMessage.append("✷ Пожалуйста, ознакомьтесь с информацией в меню /help\n\n$textForStartMessage\uD83D\uDD30  Следующая запись: нет.")
-            } else {
-                textForMessage.append("✷ Пожалуйста, ознакомьтесь с информацией в меню /help\n\n$textForStartMessage\uD83D\uDD30  Следующая запись - ${formatter.format(LocalDate.parse(nextDate))}:")
-            }
-
-            clientRepository.findAll().filter { it.specialistId == longChatId && it.appointmentDate == nextDate }.sortedBy { it.appointmentTime}.forEach { textForMessage.append("\n${it.visitAgreement} ${it.appointmentTime} - ${it.secondName} ${it.firstName.first()}. ${it.patronymic.first()}.") }
-
-            textForMessage.append("\n\n\uD83D\uDD30  Запись на сегодня:")
-            textForMessageLength = textForMessage.length
-            clientRepository.findAll().filter { it.specialistId == longChatId && it.appointmentDate.length == 10 && it.appointmentDate == localDate.toString() && it.visitAgreement != "✖" }.sortedBy { it.appointmentTime}.forEach { textForMessage.append("\n• ${it.appointmentTime} - ${it.secondName} ${it.firstName.first()}. ${it.patronymic.first()}.") }
-            if (textForMessageLength == textForMessage.length) textForMessage.append(" нет.")
-
-            val sendMessage = SendMessage(stringChatId, textForMessage.toString())
-            val settingList = listOf("Записать на приём", "Посмотреть запись ко мне", callData_addNewClient, "Работа с базой клиентов/пациентов", "⚙  Моя учетная запись")
-            sendMessage.replyMarkup = botMenuFunction.createButtonSet(settingList)
-            saveStartMessageId[stringChatId] = protectedExecute(sendMessage)
-        }
-    }
-    }
 
     fun sendHelpMessage(stringChatId: String, longChatId: Long) {
-       cleanTemporaryData(stringChatId)
+        clientTemporaryData(stringChatId)
         saveCommonUser(longChatId)
 
-    if (saveStartMessageId[stringChatId] != null) protectedExecute(DeleteMessage().putData(stringChatId, saveStartMessageId[stringChatId]!!))
+        if (saveMessageId[stringChatId] != null) protectedExecute(DeleteMessage().putData(stringChatId, saveMessageId[stringChatId] ?: 0))
+        val user: User = userRepository.findById(longChatId).get()
 
-    val user: User = userRepository.findById(longChatId).get()
-
-    val helpText = "\uD83D\uDD30  Программа предназначена для ведения клиентской/пациентской записи. Особенностью приложения является то, что не происходит прямого взаимодействия между пользователями, " +
-            "от клиента не требуется ввода своих персональных данных, карточку клиента создаёт специалист и доступна она только ему самому. Приложение не предоставляет возможности для поиска " +
-            "одним пользователям других пользователей, тем самым обеспечивая конфиденциальность."
-
-    if (user.firstName.isEmpty()){
-        val sendMessage = SendMessage(stringChatId,  helpText)
-        val settingList = listOf("\uD83D\uDCC5  Посмотреть мою запись", "Зарегистрироваться как специалист")
-        sendMessage.replyMarkup = botMenuFunction.createButtonSet(settingList)
-        saveStartMessageId[stringChatId] = protectedExecute(sendMessage)
-    } else {
-        val textForMessage = "$helpText\nКак добавить клиента:\n1. Клавиша меню <Добавить нового клиента/пациента>, затем " +
-                "<Генерировать код для клиента>, сообщить сгенерированный код клиенту и далее следовать сообщениям-подсказкам. Если клиент зарегистрирован с помощью кода через Telegram, он будет получать оповещение накануне визита к вам" +
-                " и должен будет подтвердить или отменить визит, при этом вы получите оповещение с результатами рассылки. \n2. Клавиша меню <Добавить нового клиента/пациента>, затем <Добавить клиента без кода> и следовать " +
-                "подсказкам программы. Добавленному таким образом клиенту код регистрации можно отправить позднее.\n3. С помощью быстрой команды в чат - примеры команд описаны ниже.\nДалее можно запланировать визит клиента к вам, " +
-                "сделать это можно с помощью клавиши меню <Записать на приём> или " +
-                "отправить в чат быструю команду, в последнем случае можно использовать голосовой ввод - таким образом можно записать клиента на приём максимально быстро. Раздел меню <Работа с базой клиентов/пациентов>" +
-                " содержит подразделы, позволяющие делать заметки, выписать клиента, удалить, отправить код уже добавленному в базу клиенту для регистрации через Telegram.\n\n\uD83D\uDD30  Индикация клиентов на экране главного меню нужна для того, " +
-                "чтобы специалист видел, кто из клиентов подтвердил свой предстоящий визит. Тем клиентам, которые зарегистрированы в приложении через Telegram, " +
-                "накануне приёма приходит сообщение для подтверждения или отмены визита.\n\nСимволы индикации клиентов:\n❔ - клиент должен подтвердить визит\n✔ - клиент подтвердил визит\n✖ - клиент отменил визит\n" +
-                "？- клиент не зарегистрирован через Telegram и не получает сообщений.\n\n\uD83D\uDD30  Быстрые команды служат для того, чтобы добавить в базу клиента, работать с его данными, записать его на приём. " +
-                "Для использования таких команд, надо с клавиатуры или с помощью голосового ввода (самый быстрый способ) написать сообщение и отправить его в чат.\n\nСообщения-быстрые команды, которые можно " +
-                "отправить в чат:\n\uD83D\uDD39 Фамилия или первые три буквы фамилии (например: Иванов) - найти клиента для действий с его данными." +
-                "\n\uD83D\uDD39 ФИО клиента (например: Иванов Иван Иванович) - добавить нового пациента в базу данных.\n\uD83D\uDD39 Фамилию дату месяц час минуты (например: Иванов 10 мая 15 30) - " +
-                "записать клиента на указанные дату и время."
-        val sendMessage = SendMessage(stringChatId, textForMessage)
-        sendMessage.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
-        saveStartMessageId[stringChatId] = protectedExecute(sendMessage)
+        if (user.secondName.isEmpty()){
+            val sendMessage = SendMessage(stringChatId, text_commonHelpText)
+            sendMessage.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", callData_mainMenu)
+            saveMessageId[stringChatId] = protectedExecute(sendMessage)
+        } else {
+            val textForMessage = "$text_commonHelpText\n$text_specialistHelpText"
+            val sendMessage = SendMessage(stringChatId, textForMessage)
+            sendMessage.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", callData_mainMenu)
+            saveMessageId[stringChatId] = protectedExecute(sendMessage)
+        }
     }
-    }
+
 
     fun deleteUserData(stringChatId: String, longChatId: Long) {
-        cleanTemporaryData(stringChatId)
+        clientTemporaryData(stringChatId)
         saveCommonUser(longChatId)
-
-    if (saveStartMessageId[stringChatId] != null) protectedExecute(DeleteMessage().putData(stringChatId, saveStartMessageId[stringChatId]!!))
-
-    val sendMessage = SendMessage(stringChatId, "❗ Пожалуйста, подтвердите удаление вашей учётной записи. После подтверждения все ваши данные будут удалены.")
-    sendMessage.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  Отмена", "\uD83D\uDD19  Назад в меню", "Удалить данные", "#delmydata")
-    saveStartMessageId[stringChatId] = protectedExecute(sendMessage)
-    }
-
-
-    fun editStartMessage(stringChatId: String, longChatId: Long, intMessageId: Int) {
-        cleanTemporaryData(stringChatId)
-        saveCommonUser(longChatId)
-
-    val user: User = userRepository.findById(longChatId).get()
-
-    if (user.firstName.isEmpty()){
-        val editMessageText = EditMessageText().putData(stringChatId, intMessageId, "Здравствуйте, уважаемый пользователь! Здесь вы можете получать информацию о предстоящем визите к своему специалисту. Для этого, если вам был сообщён короткий код, введите его и отправьте сообщение в чат.")
-        val settingList = listOf("\uD83D\uDCC5  Посмотреть мою запись", "Зарегистрироваться как специалист")
-        editMessageText.replyMarkup = botMenuFunction.createButtonSet(settingList)
-        protectedExecute(editMessageText)
-    } else {
-        if (user.profession == config.adminUser) {
-            val users = userRepository.findAll()
-            val specialists = users.filter { it.profession.isNotEmpty() }
-            val clients = clientRepository.findAll()
-
-            val textForMessage = "$textForStartMessage\uD83D\uDD30  Меню администратора.\nВсего пользователей: ${users.count()}" +
-                    "\nВсего специалистов: ${specialists.count() - 1}\nДобавлено клиентов: ${clients.count()}\nВсего стартовых сообщений: ${saveStartMessageId.size}"
-            val sendMessage = SendMessage(stringChatId, textForMessage)
-            val settingList = listOf("Редактировать пользователя", "Сообщение всем пользователям", "Сообщение пользователю", "StartMessage текст", "Меню специалиста", "Очистить чат", "Backup меню")
-            sendMessage.replyMarkup = botMenuFunction.createButtonSet(settingList)
-            saveStartMessageId[stringChatId] = protectedExecute(sendMessage)
-        } else {
-            specialistUserMenu(longChatId, stringChatId, intMessageId)
-        }
-      }
-    }
-
-
-    fun createDefaultBackup(stringChatId: String, intMessageId: Int, backupTitle: String, elementList: List<String>) {
-        val backupDirectory: String = config.defaultDirectory + backupTitle // TODO     elementTitle   elementList
-        val backupCreator = BackupCreator()
-        val backupFile = backupCreator.receiveBackupFile(backupTitle, elementList)
-        backupCreator.createBackupXml(backupFile, backupDirectory)
-        val textForMessage = "\uD83D\uDD30  Бэкап-файл данных <$backupTitle> создан в директории:\n$backupDirectory"
-
-        val editMessageText = EditMessageText().putData(stringChatId, intMessageId, textForMessage)
-        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню", "В backup меню", "Backup меню")
-        protectedExecute(editMessageText)
-    }
-
-
-    fun specialistUserMenu(longChatId: Long, stringChatId: String, intMessageId: Int) {
-        var textForMessageLength = 0
-        val localDate = LocalDate.now()
-
-        val nextDate: String? = clientRepository.findAll().filter { it.specialistId == longChatId && it.appointmentDate.length == 10 && localDate.isBefore(LocalDate.parse(it.appointmentDate)) }.minByOrNull { it.appointmentDate }?.appointmentDate
-        val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
-        val textForMessage = StringBuilder()
-
-        if (nextDate.isNullOrEmpty()) {
-            textForMessage.append("$textForStartMessage\uD83D\uDD30  Следующая запись: нет.")
-        } else {
-            textForMessage.append("$textForStartMessage\uD83D\uDD30  Следующая запись - ${formatter.format(LocalDate.parse(nextDate))}:")
-        }
-
-        clientRepository.findAll().filter { it.specialistId == longChatId && it.appointmentDate == nextDate }.sortedBy { it.appointmentTime}.forEach { textForMessage.append("\n${it.visitAgreement} ${it.appointmentTime} - ${it.secondName} ${it.firstName.first()}. ${it.patronymic.first()}.") }
-
-        textForMessage.append("\n\n\uD83D\uDD30  Запись на сегодня:")
-        textForMessageLength = textForMessage.length
-        clientRepository.findAll().filter { it.specialistId == longChatId && it.appointmentDate.length == 10 && it.appointmentDate == localDate.toString() && it.visitAgreement != "✖" }.sortedBy { it.appointmentTime}.forEach { textForMessage.append("\n• ${it.appointmentTime} - ${it.secondName} ${it.firstName.first()}. ${it.patronymic.first()}.") }
-        if (textForMessageLength == textForMessage.length) textForMessage.append(" нет.")
-
-        val editMessageText = EditMessageText().putData(stringChatId, intMessageId, textForMessage.toString())
-        val settingList = listOf("Записать на приём", "Посмотреть запись ко мне", callData_addNewClient, "Работа с базой клиентов/пациентов", "⚙  Моя учетная запись")
-        editMessageText.replyMarkup = botMenuFunction.createButtonSet(settingList)
-        protectedExecute(editMessageText)
-    }
-
-
-    fun lookClientAppointment(longChatId: Long, stringChatId: String, intMessageId: Int) {
-    val firstText = "ℹ  Ваша запись у специалиста:"
-    val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
-    val localDate = LocalDate.now()
-    val textForMessage = StringBuilder()
-    textForMessage.append(firstText)
-
-    clientRepository.findAll().filter { it.chatId == longChatId && it.appointmentDate.length == 10 &&
-            (localDate.isEqual(LocalDate.parse(it.appointmentDate)) || localDate.isAfter(LocalDate.parse(it.appointmentDate))) }.
-    sortedBy { it.appointmentDate }.forEach { textForMessage.append("\n\uD83D\uDD39 ${userRepository.findById(it.specialistId).
-    get().profession}, ${formatter.format(LocalDate.parse(it.appointmentDate))} в ${it.appointmentTime}") }
-
-    if (textForMessage.toString() == firstText) textForMessage.append(" нет записи.")
-
-    val editMessageText = EditMessageText()
-    editMessageText.putData(stringChatId, intMessageId, textForMessage.toString())
-    editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню", "\uD83D\uDD19  Назад в меню")
-    protectedExecute(editMessageText)
-    }
-
-
-    fun addNewClient(longChatId: Long, stringChatId: String, intMessageId: Int) {
-    val user = userRepository.findById(longChatId).get()
-    val clientsAmount = clientRepository.findAll().filter { it.specialistId == longChatId }.size
-    val editMessageText = EditMessageText()
-
-    if ((LocalDate.now().isAfter(LocalDate.parse(user.paymentDate)) && clientsAmount > config.freeClientsAmount) || clientsAmount ==  config.maxClientsAmount){
-        val textForMessage = "\uD83D\uDD30  Лимит добавления клиентов исчерпан. Без подключения абонемента специалист может зарегистрировать до 50 клиентов, с действующим абонементом до 1000. Сейчас у " +
-                "вас добавлено $clientsAmount клиентов."
-        editMessageText.putData(stringChatId, intMessageId, textForMessage)
-        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню", "Абонемент", "#payment")
-    } else {
-        val word = "𝙥𝙚𝙧𝙨𝙤𝙣𝙖𝙡 𝙘𝙡𝙞𝙚𝙣𝙩 𝙢𝙖𝙣𝙖𝙜𝙚𝙧"
-        val bigWord = "\uD835\uDE4B\uD835\uDE5A\uD835\uDE67\uD835\uDE68\uD835\uDE64\uD835\uDE63\uD835\uDE56\uD835\uDE61 \uD835\uDE62\uD835\uDE56\uD835\uDE63\uD835\uDE56\uD835\uDE5C\uD835\uDE5A\uD835\uDE67"
-        val textForMessage = "\uD83D\uDD30  Если ваш клиент/пациент использует Telegram, вы можете сообщить ему имя бота, которое надо ввести в строку поиска Telegram: $word. Из списка предложенных программ выбрать $bigWord." +
-                "\nЗатем нажмите клавишу <Генерировать код для клиента> и сообщите код с экрана клиенту. Клиент должен зайти в бот и отправить сообщение с кодом в чат. Вам останется только заполнить ФИО клиента " +
-                "и клиент будет добавлен в вашу базу.\n\n\uD83D\uDD30  Также, можно сначала добавить клиента/пациента в базу без кода, и если клиент использует Telegram, отправить код позже из меню <Работа с базой клиентов/пациентов>. " +
-                "Для добавления клиента без генерации кода, нажмите клавишу <Добавить клиента без кода>."
-        editMessageText.putData(stringChatId, intMessageId, textForMessage)
-        val settingList = listOf(callData_generateCode, callData_addCommonClient, "\uD83D\uDD19  Назад в меню") // TODO ##regspec
-        editMessageText.replyMarkup = botMenuFunction.createButtonSet(settingList)
-    }
-    protectedExecute(editMessageText)
-    }
-
-
-
-    fun generateCode(stringChatId: String, callBackData: String, intMessageId: Int) {
-    val clientId = callBackData.replace(callData_generateCode, "")
-    var password: Int
-    var isSinglePassword = false
-    saveChatId[stringChatId] = 0  // TODO надо ли?
-
-    if (registerPassword[stringChatId] == null || registerPassword[stringChatId] == 0){
-        password = 0
-        while (!isSinglePassword){
-            password = (100..999).random()
-            for ((key, value) in registerPassword) {
-                if (value == password) break
-            }
-            isSinglePassword = true
-        }
-        registerPassword[stringChatId] = password
-    } else {
-        password = registerPassword[stringChatId]!!
-    }
-
-    val editMessageText = EditMessageText() // ввести в строку поиска Telegram: personal client manager. Из списка программ выбрать "Personal manager"
-    val word = "𝙥𝙚𝙧𝙨𝙤𝙣𝙖𝙡 𝙘𝙡𝙞𝙚𝙣𝙩 𝙢𝙖𝙣𝙖𝙜𝙚𝙧"
-    val bigWord = "\uD835\uDE4B\uD835\uDE5A\uD835\uDE67\uD835\uDE68\uD835\uDE64\uD835\uDE63\uD835\uDE56\uD835\uDE61 \uD835\uDE62\uD835\uDE56\uD835\uDE63\uD835\uDE56\uD835\uDE5C\uD835\uDE5A\uD835\uDE67"
-    val textForMessage = "ㅤ\n\n\uD83D\uDD38 Сообщите этот код клиенту:  $password\n\nКлиент должен зайти в Telegram, ввести в строку поиска Telegram: $word. " +
-            "Из списка программ выбрать $bigWord, зайти в бот, ввести трёхзначный код и отправить сообщение в чат. " +
-            "Если клиент успешно введёт и отправит код, у вас появится меню регистрации нового клиента. Время существования кода ограничено, сброс происходит каждый час. Если до истечения этого времени клиент не " +
-            "будет зарегистрирован, сгенерируйте новый код. Новый код не будет генерироваться, пока действителен предыдущий.\n\uD83D\uDD38 Внимание! - если вы добавляете нового клиента, не выходя из данного раздела " +
-            "дождитесь подтверждения кода, в противном случае процесс регистрации будет прерван. Если код отправлен уже зарегистрированному клиенту, выход в главное меню не повлечет никаких последствий."
-    editMessageText.putData(stringChatId, intMessageId, textForMessage)
-    editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню", "\uD83D\uDD19  Назад в меню")
-    protectedExecute(editMessageText)
-    saveClientId[stringChatId] = clientId
-    }
-
-
-    fun receiveClientsMenu(longChatId: Long, stringChatId: String, intMessageId: Int) {
-    val localDate = LocalDate.now()
-    val clients = clientRepository.findAll().filter { it.specialistId == longChatId }
-    val amount = clients.size
-    val user = userRepository.findById(longChatId).get()
-
-    val tex = "\n\nПри необходимости обойти данное ограничение, вы можете связаться с автором приложения."
-    val text = "\n\nЧтобы увеличить лимит до 1000, вы можете внести абонентскую плату. В период действия абонемента можно добавлять новых клиентов вплоть до исчерпания ограничения в 1000 записей."
-
-    var textForMessage = "\uD83D\uDD30  Всего клиентов добавлено: $amount\n\n"
-
-    textForMessage += if (localDate.isAfter(LocalDate.parse(user.paymentDate))){
-        if ((config.freeClientsAmount - amount) > 0) "\uD83D\uDD38Лимит добавления составляет ${config.freeClientsAmount} клиентов, до исчерпания осталось: ${config.freeClientsAmount - amount}$text" else "\uD83D\uDD38Лимит добавления составляет 50 клиентов, сейчас лимит превышен.$text"
-    } else {
-        if ((config.maxClientsAmount - amount) > 0) "\uD83D\uDD39Лимит добавления составляет ${config.maxClientsAmount} клиентов, до исчерпания осталось: ${config.maxClientsAmount - amount}" else "\uD83D\uDD39Лимит добавления составляет 1000 клиентов, сейчас лимит исчерпан.$tex"
-    }
-
-    val editMessageText = EditMessageText()
-    editMessageText.putData(stringChatId, intMessageId, textForMessage)
-    editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню", "Назад  ⚙", "⚙  Моя учетная запись")
-    protectedExecute(editMessageText)
-    }
-
-
-    fun receiveSchedule(longChatId: Long, stringChatId: String, intMessageId: Int) {
-    val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
-    var dateText = ""
-    val textForMessage = StringBuilder()
-    val localDate = LocalDate.now()
-    textForMessage.append("\uD83D\uDD30  Запись к вам:")
-
-    clientRepository.findAll().filter { it.specialistId == longChatId && it.appointmentDate.length == 10 &&
-            !localDate.isAfter(LocalDate.parse(it.appointmentDate)) }.sortedBy { it.appointmentDate }.asReversed()
-            .forEach { textForMessage.append( "\n" + (if (dateText == it.appointmentDate) "" else "\n") + "\uD83D\uDD39 " +
-            "${formatter.format(LocalDate.parse(it.appointmentDate))} в " + "${it.appointmentTime}  - ${it.secondName} " +
-            "${it.firstName.first()}"); dateText = it.appointmentDate }
-
-    val editMessageText = EditMessageText()
-    editMessageText.putData(stringChatId, intMessageId, textForMessage.toString())
-    editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню", "\uD83D\uDD19  Назад в меню")
-    protectedExecute(editMessageText)
-    }
-
-
-    fun receiveAllClients(longChatId: Long, stringChatId: String, callBackData: String, intMessageId: Int) {
-    val returnBackData = callBackData.replace("#allcli", "")
-    val clientsList = mutableListOf<String>()
-    val clients = clientRepository.findAll().filter { it.specialistId == longChatId }.sortedBy { it.secondName }
-    clients.distinctBy { it.secondName }.forEach { clientsList.add(it.secondName) }
-
-    clientsList.add("\uD83D\uDD19  Назад в меню")
-    val editMessageText = EditMessageText()
-    editMessageText.putData(stringChatId, intMessageId, "\uD83D\uDD30  Всего добавлено: ${clients.size}\nСписок фамилий клиентов/пациентов:")
-    editMessageText.replyMarkup = botMenuFunction.createDataButtonSet(clientsList, returnBackData)
-    protectedExecute(editMessageText)
-    }
-
-
-
-    fun receiveClientRemark(stringChatId: String, callBackData: String, intMessageId: Int) {
-    val clientId = callBackData.replace("Заметки клиента", "").toLong()
-    val client: ClientData = clientRepository.findById(clientId).get()
-    val editMessageText = EditMessageText()
-    val remarkText = "\uD83D\uDCDD Заметки:\n${client.remark}\n\n\uD83D\uDD30  Здесь вы можете добавить или удалить записи, связанные с клиентом. Эти записи доступны для просмотра только вам. " +
-            "\n\uD83D\uDD39 Для добавления заметки ведите текст и отправьте сообщение в чат."
-
-    editMessageText.putData(stringChatId, intMessageId, remarkText)
-
-    if (client.remark.isEmpty()){
-        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
-    } else {
-        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню", "Удалить записи", "#delrem$clientId")
-    }
-
-    protectedExecute(editMessageText)
-    saveChatId[stringChatId] = clientId
-    tempData[stringChatId] = inputRemark
+        if (saveMessageId[stringChatId] != null) protectedExecute(DeleteMessage().putData(stringChatId, saveMessageId[stringChatId] ?: 0))
+        val sendMessage = SendMessage(stringChatId, text_approveDelData)
+        sendMessage.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  Отмена", callData_mainMenu, "Удалить данные", callData_delAllUserData)
+        saveMessageId[stringChatId] = protectedExecute(sendMessage)
     }
 
 
     fun cancelClientAppointment(longChatId: Long, stringChatId: String, callBackData: String, intMessageId: Int) {
-    val clientId = callBackData.replace("#cancapp", "").toLong()
-    val user = userRepository.findById(longChatId).get()
-    val client = clientRepository.findById(clientId).get()
-    client.appointmentTime = ""
-    client.appointmentDate = ""
-    clientRepository.save(client)
-
-    val textForMessage: String
-
-    if (client.chatId > 1){
-        val sendMessage = SendMessage(client.chatId.toString(), "Здравствуйте, ${client.firstName} ${client.patronymic}, ваша запись у специалиста: ${user.secondName} ${user.firstName} ${user.patronymic} была отменена.")
-        sendMessage.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD835\uDC0E\uD835\uDC0A", "#delmes")
-        protectedExecute(sendMessage)
-        textForMessage = "\uD83D\uDD30  Запись клиента была отменена, сообщение об отмене было отправлено клиенту."
-    } else {
-        textForMessage = "\uD83D\uDD30  Запись клиента была отменена."
-    }
-
-    val editMessageText = EditMessageText()
-    editMessageText.putData(stringChatId, intMessageId, textForMessage)
-    editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
-    protectedExecute(editMessageText)
-    }
-
-
-    fun putSendMessageTime(longChatId: Long, stringChatId: String, intMessageId: Int, putTime: Int) {
+        val clientId = callBackData.replace(callData_cancelClientAppointment, "").toLong()
         val user = userRepository.findById(longChatId).get()
-        val sendMessageTime = user.sendTime
-
-        when {
-            putTime == -1 && sendMessageTime > 6 -> user.sendTime = sendMessageTime - 1
-            putTime == 1 && sendMessageTime < 22 -> user.sendTime = sendMessageTime + 1
-        }
-
-        userRepository.save(user)
-        val editMessageText: EditMessageText = botMenuFunction.receiveSettingsKeyboard(stringChatId, intMessageId, user)
-        protectedExecute(editMessageText)
-    }
-
-
-    fun putSendMessageDay(longChatId: Long, stringChatId: String, intMessageId: Int, putDay: Int) {
-        val user = userRepository.findById(longChatId).get()
-        val sendMessageDay = user.sendBeforeDays
-
-        when {
-            putDay == -1 && sendMessageDay > 1 -> user.sendBeforeDays = sendMessageDay - 1
-            putDay == 1 && sendMessageDay < 3 -> user.sendBeforeDays = sendMessageDay + 1
-        }
-
-        userRepository.save(user)
-        val editMessageText: EditMessageText = botMenuFunction.receiveSettingsKeyboard(stringChatId, intMessageId, user)
-        protectedExecute(editMessageText)
-    }
-
-
-    fun putTimeZone(longChatId: Long, stringChatId: String, intMessageId: Int, putTimeZone: Int) {
-        val user = userRepository.findById(longChatId).get()
-        val timeZoneHour = user.timeZone
-
-        when {
-            putTimeZone == -1 && timeZoneHour > -5 -> user.timeZone = timeZoneHour - 1
-            putTimeZone == 1 && timeZoneHour < 10 -> user.timeZone = timeZoneHour + 1
-        }
-
-        userRepository.save(user)
-        val editMessageText: EditMessageText = botMenuFunction.receiveSettingsKeyboard(stringChatId, intMessageId, user)
-        protectedExecute(editMessageText)
-    }
-
-
-    fun receiveAppointmentForClient(longChatId: Long, stringChatId: String, intMessageId: Int) {
-        val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
-        val editMessageText = EditMessageText()
-        val clients = clientRepository.findAll().filter { it.chatId == longChatId && it.appointmentDate.length == 10 }.sortedBy { it.appointmentTime }.sortedBy { it.appointmentDate } // TODO it.appointmentTime .sortedBy  it.appointmentDate
-
-        if (clients.isEmpty()) {
-            editMessageText.putData(stringChatId, intMessageId, "\uD83D\uDD30  У вас нет записи к специалисту.")
-        } else {
-            val textForMessage = StringBuilder()
-            textForMessage.append("\uD83D\uDD30  Ваша запись к специалисту:")
-            clients.forEach { textForMessage.append("\n\uD83D\uDD39 ${formatter.format(LocalDate.parse(it.appointmentDate))} в ${it.appointmentTime}  у специалиста ${userRepository.findById(it.specialistId).get().secondName} ${userRepository.findById(it.specialistId).get().firstName} ${userRepository.findById(it.specialistId).get().patronymic}") }
-            editMessageText.putData(stringChatId, intMessageId, textForMessage.toString())
-        }
-        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
-        protectedExecute(editMessageText)
-    }
-
-
-    fun deleteClientRemark(stringChatId: String, callBackData: String, intMessageId: Int) {
-        cleanTemporaryData(stringChatId)
-        val clientId = callBackData.replace("#delrem", "").toLong()
         val client = clientRepository.findById(clientId).get()
-        client.remark = ""
+        client.appointmentTime = ""
+        client.appointmentDate = ""
         clientRepository.save(client)
+        val textForMessage: String
+
+        if (client.chatId > 1){
+            val sendMessage = SendMessage(client.chatId.toString(), "Здравствуйте, ${client.firstName} ${client.patronymic}, ваша запись у специалиста: ${user.getFullName()} была отменена.")
+            sendMessage.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD835\uDC0E\uD835\uDC0A", callData_delMessage)
+            protectedExecute(sendMessage)
+            textForMessage = text_removeAppointment
+        } else {
+            textForMessage = text_removeClientAppointment
+        }
 
         val editMessageText = EditMessageText()
-        editMessageText.putData(stringChatId, intMessageId, "\uD83D\uDD30  Все заметки были удалены.")
-        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
+        editMessageText.putData(stringChatId, intMessageId, textForMessage)
+        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", callData_mainMenu)
         protectedExecute(editMessageText)
-    }
-
-
-    fun putUserPassword(longChatId: Long, stringChatId: String, intMessageId: Int) {
-    val user = userRepository.findById(longChatId).get()
-    val editMessageText = EditMessageText()
-
-    if (user.password.isEmpty()){
-        editMessageText.putData(stringChatId, intMessageId, "\uD83D\uDD30  Для пароля установлено ограничение длинны: не менее 5 и не более 15 символов. Введите пароль в поле ввода и отправьте сообщение в чат.")
-        tempData[stringChatId] = inputPassword
-    } else {
-        editMessageText.putData(stringChatId, intMessageId, "\uD83D\uDD30  У вашей учётной записи уже имеется пароль. Чтобы его изменить, введите действующий пароль и отправьте сообщение в чат.")
-        tempData[stringChatId] = inputOldPassword
-    }
-    editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Отмена", "\uD83D\uDD19  Назад в меню")
-    protectedExecute(editMessageText)
     }
 
 
     fun createAppointmentMessages(longChatId: Long, stringChatId: String, intMessageId: Int, callBackData: String) {
-        val dataString: String = callBackData.replace("#cldata", "")
+        val dataString: String = callBackData.replace(callData_clientData, "")
         val splitDataString = dataString.split("#")
         val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
         val clientId = splitDataString[0].toLong()
@@ -1741,329 +958,22 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
         val user = userRepository.findById(longChatId).get()
 
         if (client.chatId > 1){
-            textAddition = "\n\n\uD83D\uDD39 Клиент зарегистрирован через Telegram и получит сообщение с просьбой подтвердить предстоящий приём. Однако, если клиент был записан накануне даты приема и рассылка " +
-                    "сообщений для подтверждения визита уже произошла, это сообщение клиент уже не получит и символ-индикатор клиента в главном меню останется \"❔\""
-            val sendMessage = SendMessage(client.chatId.toString(), "ℹ  Здравствуйте, у вас запланирован визит к специалисту: ${user.secondName} ${user.firstName} ${user.patronymic} на ${formatter.format(LocalDate.parse(date))} в $time\n")
-            sendMessage.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD835\uDC0E\uD835\uDC0A", "#delmes")
+            textAddition = text_newClientAppointment
+            val sendMessage = SendMessage(client.chatId.toString(), "$text_messageClientAppointment${user.getFullName()} на ${formatter.format(LocalDate.parse(date))} в $time\n")
+            sendMessage.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD835\uDC0E\uD835\uDC0A", callData_delMessage)
             protectedExecute(sendMessage)
         }
 
         val editMessageText = EditMessageText()
         val textForMessage = "\uD83D\uDD30 ${client.secondName} ${client.firstName} ${client.patronymic} записан на ${formatter.format(LocalDate.parse(date))} в $time$textAddition"
         editMessageText.putData(stringChatId, intMessageId, textForMessage)
-        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню", "\uD83D\uDD19  Назад в меню")
-        protectedExecute(editMessageText)
-    }
-
-
-    fun receiveAppointmentMonth(stringChatId: String, intMessageId: Int, callBackData: String) {
-    val clientId = callBackData.replace("#clid", "")
-
-    val client: ClientData = clientRepository.findById(clientId.toLong()).get()
-    val editMessageText = EditMessageText()
-    val date = LocalDate.now()
-    val numFormat = DateTimeFormatter.ofPattern("MM")
-    val buttonFormat = DateTimeFormatter.ofPattern("MM.yyyy")
-    val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
-
-    val inlineKeyboardMarkup = InlineKeyboardMarkup()
-    val rowsInline = ArrayList<List<InlineKeyboardButton>>()
-    val firstRowInlineButton = ArrayList<InlineKeyboardButton>()
-
-    val firstButton = InlineKeyboardButton()
-    firstButton.putData(buttonFormat.format(date), "${numFormat.format(date)}@$clientId")
-    firstRowInlineButton.add(firstButton)
-
-    val secondButton = InlineKeyboardButton()
-    secondButton.putData(buttonFormat.format(date.plusMonths(1)), "${numFormat.format(date.plusMonths(1))}@$clientId")
-    firstRowInlineButton.add(secondButton)
-
-    val thirdButton = InlineKeyboardButton()
-    thirdButton.putData(buttonFormat.format(date.plusMonths(2)), "${numFormat.format(date.plusMonths(2))}@$clientId")
-    firstRowInlineButton.add(thirdButton)
-
-    val secondRowInlineButton = ArrayList<InlineKeyboardButton>()
-    val returnButton = InlineKeyboardButton()
-    returnButton.putData("\uD83D\uDD19  Отмена", "\uD83D\uDD19  Назад в меню")
-    secondRowInlineButton.add(returnButton)
-
-    rowsInline.add(firstRowInlineButton)
-    rowsInline.add(secondRowInlineButton)
-    inlineKeyboardMarkup.keyboard = rowsInline
-
-    editMessageText.replyMarkup = inlineKeyboardMarkup
-
-    val textForMessage: String = if (client.appointmentDate.length == 10 && LocalDate.now().isBefore(LocalDate.parse(client.appointmentDate))) {
-        "\uD83D\uDD38 Клиент уже записан на ${formatter.format(LocalDate.parse(client.appointmentDate))} в ${client.appointmentTime}, если процесс записи будет продолжен," +
-                " клиент будет перезаписан на новое время.\n\n\uD83D\uDD30 Выберите месяц для записи клиента/пациента:"
-    } else {
-        "\uD83D\uDD30 Выберите месяц для записи клиента/пациента:"
-    }
-
-    editMessageText.putData(stringChatId, intMessageId, textForMessage)
-    protectedExecute(editMessageText)
-    }
-
-
-    fun receiveClientSettingMenu(stringChatId: String, intMessageId: Int, callBackData: String) {
-    val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
-    val clientId = callBackData.replace("#getmenu", "")
-    val client: ClientData = clientRepository.findById(clientId.toLong()).get()
-
-    val menuList = mutableListOf("Заметки клиента")
-
-    val regText = if (client.chatId.toInt() != 1) {
-        "\n\uD83D\uDD38 Клиент зарегистрирован в Telegram и получает сообщения о предстоящем приеме."
-    } else {
-        menuList.add(callData_generateCode)
-        "\n\uD83D\uDD38 Вы можете сгенерировать код для регистрации клиента, если у клиента есть Telegram."
-    }
-
-    val appointmentText = if (client.appointmentDate.length != 10) {
-        "нет"
-    } else {
-        menuList.add("Выписать клиента")
-        "${formatter.format(LocalDate.parse(client.appointmentDate))}  в  ${client.appointmentTime}"
-    }
-
-    menuList.add("Удалить клиента")
-    menuList.add("\uD83D\uDD19  Назад в меню")
-
-    val textForMessage = "\uD83D\uDD39  История посещений:${client.visitHistory}\n\n" +
-            "\uD83D\uDD30 Клиент: ${client.secondName} ${client.firstName} ${client.patronymic}" +
-            "\n\n✷ В этом меню вы можете добавить текст-заметку в карточку клиента (заметка видна только вам), " +
-            "удалить данные этого клиента, отменить запись, если у клиента запланирован визит к вам.\n" +
-            "$regText\n\uD83D\uDD38 Визит клиента запланирован:  $appointmentText"
-
-    val editMessageText = EditMessageText()
-    editMessageText.putData(stringChatId, intMessageId, textForMessage)
-    editMessageText.replyMarkup = botMenuFunction.createDataButtonSet(menuList, clientId)
-    protectedExecute(editMessageText)
-    }
-
-
-    fun receiveAppointmentDay(longChatId: Long, stringChatId: String, intMessageId: Int, callBackData: String) {
-    val dataString = callBackData.split("@")
-    val appointmentMonth = dataString[0].toInt()
-    val clientId = dataString[1]
-    val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
-    val localDate = LocalDate.now()
-    val editMessageText = EditMessageText()
-    val startDay: Int
-    comeBackInfo[stringChatId] = callBackData
-
-    val stringBuilder = StringBuilder("ℹ  Записано клиентов по датам:\n")
-    val daysAppointment = HashMap<String, Int>()
-
-    val clients = clientRepository.findAll().filter { it.specialistId == longChatId && it.appointmentDate.length == 10 && it.appointmentDate.split("-")[1] == dataString[0] && (localDate.isEqual(LocalDate.parse(it.appointmentDate)) || localDate.isBefore(LocalDate.parse(it.appointmentDate))) }.sortedBy { it.appointmentDate }
-    clients.forEach { if (daysAppointment[it.appointmentDate] == null) daysAppointment[it.appointmentDate] = 1 else daysAppointment[it.appointmentDate] = daysAppointment[it.appointmentDate]!! + 1 }
-    daysAppointment.toSortedMap().forEach { stringBuilder.append("• ${formatter.format(LocalDate.parse(it.key))}   записано клиентов:   ${it.value}\n") }
-
-    val appointmentDate = if (localDate.monthValue > appointmentMonth) {
-        localDate.plusYears(1).withMonth(appointmentMonth)
-    } else {
-        localDate.withMonth(appointmentMonth)
-    }
-
-    if (appointmentDate.monthValue == localDate.monthValue) {
-        startDay = localDate.dayOfMonth
-        localDate.lengthOfMonth() - localDate.dayOfMonth // return
-    } else {
-        startDay = 1
-        appointmentDate.lengthOfMonth() // return
-    }
-
-    val allDays = appointmentDate.lengthOfMonth()
-
-    val inlineKeyboardMarkup = InlineKeyboardMarkup()
-    val rowsInline = ArrayList<List<InlineKeyboardButton>>()
-    val firstRowInlineButton = ArrayList<InlineKeyboardButton>()
-    val secondRowInlineButton = ArrayList<InlineKeyboardButton>()
-    val thirdRowInlineButton = ArrayList<InlineKeyboardButton>()
-    val fourthRowInlineButton = ArrayList<InlineKeyboardButton>()
-    val fifthRowInlineButton = ArrayList<InlineKeyboardButton>()
-
-    var iterationCount = 1
-    for (day in startDay .. allDays) {
-        when {
-            iterationCount < 9 -> {
-                val button = InlineKeyboardButton()
-                button.putData("$day", "&$day#$appointmentMonth#$clientId")
-                firstRowInlineButton.add(button)
-            }
-            iterationCount < 17 -> {
-                val button = InlineKeyboardButton()
-                button.putData("$day", "&$day#$appointmentMonth#$clientId")
-                secondRowInlineButton.add(button)
-            }
-            iterationCount < 25 -> {
-                val button = InlineKeyboardButton()
-                button.putData("$day", "&$day#$appointmentMonth#$clientId")
-                thirdRowInlineButton.add(button)
-            }
-            iterationCount < 33 -> {
-                val button = InlineKeyboardButton()
-                button.putData("$day", "&$day#$appointmentMonth#$clientId")
-                fourthRowInlineButton.add(button)
-            }
-        }
-        iterationCount++
-    }
-
-    val button = InlineKeyboardButton()
-    button.putData("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
-    fifthRowInlineButton.add(button)
-
-    rowsInline.add(firstRowInlineButton)
-    rowsInline.add(secondRowInlineButton)
-    rowsInline.add(thirdRowInlineButton)
-    rowsInline.add(fourthRowInlineButton)
-    rowsInline.add(fifthRowInlineButton)
-    inlineKeyboardMarkup.keyboard = rowsInline
-    editMessageText.replyMarkup = inlineKeyboardMarkup
-
-    stringBuilder.append("\n\n\uD83D\uDD30 Выберите дату для записи:")
-
-    editMessageText.putData(stringChatId, intMessageId, stringBuilder.toString())
-    protectedExecute(editMessageText)
-    }
-
-
-    fun receiveAppointmentHour(longChatId: Long, stringChatId: String, intMessageId: Int, callBackData: String) {
-        val dataText = callBackData.replace("&", "")
-        val splitData = dataText.split("#")
-        val dayOfMonth = if (splitData[0].length == 1) "0${splitData[0]}" else splitData[0]
-
-        val stringBuilder = StringBuilder("ℹ  Запись по времени:\n")
-        clientRepository.findAll().filter { it.specialistId == longChatId && it.appointmentDate.length == 10 }.filter { it.appointmentDate.split("-")[2] == dayOfMonth }.sortedBy { it.appointmentTime }.forEach { stringBuilder.append("• ${it.appointmentTime}  -  ${it.secondName} ${it.firstName}\n") }
-
-        val editMessageText = EditMessageText()
-
-        val inlineKeyboardMarkup = InlineKeyboardMarkup()
-        val rowsInline = ArrayList<List<InlineKeyboardButton>>()
-        val firstRowInlineButton = ArrayList<InlineKeyboardButton>()
-        val secondRowInlineButton = ArrayList<InlineKeyboardButton>()
-        val thirdRowInlineButton = ArrayList<InlineKeyboardButton>()
-        val fourthRowInlineButton = ArrayList<InlineKeyboardButton>()
-
-        for (i in 0..24) {
-            when (i) {
-                in 8..15 -> {
-                    val button = InlineKeyboardButton()
-                    button.putData("$i", "#hou$i#$dataText")
-                    firstRowInlineButton.add(button)
-                }
-
-                in 16..23 -> {
-                    val button = InlineKeyboardButton()
-                    button.putData("$i", "#hou$i#$dataText")
-                    secondRowInlineButton.add(button)
-                }
-
-                in 0..8 -> {
-                    val button = InlineKeyboardButton()
-                    button.putData("$i", "#hou$i#$dataText")
-                    thirdRowInlineButton.add(button)
-                }
-            }
-        }
-
-        val menuButton = InlineKeyboardButton()
-        menuButton.putData("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
-        fourthRowInlineButton.add(menuButton)
-
-        val backButton = InlineKeyboardButton()
-        backButton.putData("Выбрать другую дату", comeBackInfo[stringChatId]!!)
-        fourthRowInlineButton.add(backButton)
-
-        rowsInline.add(firstRowInlineButton)
-        rowsInline.add(secondRowInlineButton)
-        rowsInline.add(thirdRowInlineButton)
-        rowsInline.add(fourthRowInlineButton)
-        inlineKeyboardMarkup.keyboard = rowsInline
-
-        stringBuilder.append("\n\n\uD83D\uDD30 Выберите час для записи:")
-        editMessageText.putData(stringChatId, intMessageId, stringBuilder.toString())
-        editMessageText.replyMarkup = inlineKeyboardMarkup
-        protectedExecute(editMessageText)
-    }
-
-
-    fun receiveAppointmentMinute(longChatId: Long, stringChatId: String, intMessageId: Int, callBackData: String) {
-        val dataText = callBackData.replace("#hou", "")
-        val splitData = dataText.split("#")
-        comeBackInfo[stringChatId] = ""
-
-        val editMessageText = EditMessageText()
-        val localDate = LocalDate.now()
-        val formatter = DateTimeFormatter.ofPattern("yyyy")
-        val clientId: String = splitData[3]
-        val month: Int = splitData[2].toInt()
-        val stringMonth: String = if (month < 10) "0$month" else "$month"
-        val day: String = if (splitData[1].toInt() < 10) "0${splitData[1]}" else splitData[1]
-        val hour: String = if (splitData[0].toInt() < 10) "0${splitData[0]}" else splitData[0]
-
-
-        val year: Int = if (localDate.month.value <= month) {
-            formatter.format(localDate).toInt()
-        } else {
-            formatter.format(localDate).toInt() + 1
-        }
-
-        val date = "$year-$stringMonth-$day"
-
-        val inlineKeyboardMarkup = InlineKeyboardMarkup()
-        val rowsInline = ArrayList<List<InlineKeyboardButton>>()
-        val firstRowInlineButton = ArrayList<InlineKeyboardButton>()
-        val secondRowInlineButton = ArrayList<InlineKeyboardButton>()
-        val thirdRowInlineButton = ArrayList<InlineKeyboardButton>()
-
-        for (i in 5..56) {
-            when {
-                i == 5 -> {
-                    val button = InlineKeyboardButton()
-                    button.putData("05", "$callData_clientData$clientId#$date#$hour:05")
-                    firstRowInlineButton.add(button)
-                }
-
-                i % 5 == 0 && i < 35 -> {
-                    val button = InlineKeyboardButton()
-                    button.putData("$i", "$callData_clientData$clientId#$date#$hour:$i")
-                    firstRowInlineButton.add(button)
-                }
-
-                i % 5 == 0 -> {
-                    val button = InlineKeyboardButton()
-                    button.putData("$i", "$callData_clientData$clientId#$date#$hour:$i")
-                    secondRowInlineButton.add(button)
-                }
-
-                i == 56 -> {
-                    val button = InlineKeyboardButton()
-                    button.putData("00", "$callData_clientData$clientId#$date#$hour:00")
-                    secondRowInlineButton.add(button)
-                }
-            }
-        }
-
-        val menuButton = InlineKeyboardButton()
-        menuButton.putData("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
-        thirdRowInlineButton.add(menuButton)
-
-        rowsInline.add(firstRowInlineButton)
-        rowsInline.add(secondRowInlineButton)
-        rowsInline.add(thirdRowInlineButton)
-        inlineKeyboardMarkup.keyboard = rowsInline
-
-        val textForMessage = "\uD83D\uDD30 Выберите минуты для записи:"
-        editMessageText.putData(stringChatId, intMessageId, textForMessage)
-        editMessageText.replyMarkup = inlineKeyboardMarkup
+        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню", callData_mainMenu)
         protectedExecute(editMessageText)
     }
 
 
     fun cancelAppointment(stringChatId: String, intMessageId: Int, callBackData: String) {
-        val idData = callBackData.replace("#disapp", "").split("#")
+        val idData = callBackData.replace(callData_cancelAppointment, "").split("#")
         val userChatId = idData[0]
         val clientId = idData[1].toLong()
 
@@ -2071,19 +981,19 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
         client.visitAgreement = "✖"
         clientRepository.save(client)
 
-        val specialistEditMessageText = EditMessageText().putData(userChatId, saveStartMessageId[userChatId]!!, "❌  Клиент ${client.secondName} ${client.firstName} ${client.patronymic} отменил запись.")
-        specialistEditMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
+        val specialistEditMessageText = EditMessageText().putData(userChatId, saveMessageId[userChatId]!!, "❌  Клиент ${client.secondName} ${client.firstName} ${client.patronymic} отменил запись.")
+        specialistEditMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", callData_mainMenu)
         protectedExecute(specialistEditMessageText)
 
-        val clientEditMessageText = EditMessageText().putData(stringChatId, intMessageId, "ℹ  Вы отменили запись у специалиста. Если запись была отменена случайно или вы изменили свое решение, свяжитесь со своим специалистом.")
-        clientEditMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD835\uDC0E\uD835\uDC0A", "#delmes")
+        val clientEditMessageText = EditMessageText().putData(stringChatId, intMessageId, text_clientCanceled)
+        clientEditMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD835\uDC0E\uD835\uDC0A", callData_delMessage)
         protectedExecute(clientEditMessageText)
     }
 
 
 
     fun approveAppointment(stringChatId: String, intMessageId: Int, callBackData: String) {
-        val idData = callBackData.replace("#approve", "").split("#")
+        val idData = callBackData.replace(callData_approveAppointment, "").split("#")
         val userChatId = idData[0]
         val clientId = idData[1].toLong()
 
@@ -2092,45 +1002,21 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
         clientRepository.save(client)
 
         val specialistEditMessageText = EditMessageText()
-        specialistEditMessageText.putData(userChatId, saveStartMessageId[userChatId]!!, "✅  Клиент ${client.secondName} ${client.firstName} ${client.patronymic} подтвердил запись.")
-        specialistEditMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню")
+        specialistEditMessageText.putData(userChatId, saveMessageId[userChatId]!!, "✅  Клиент ${client.secondName} ${client.firstName} ${client.patronymic} подтвердил запись.")
+        specialistEditMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню", callData_mainMenu)
         protectedExecute(specialistEditMessageText)
 
         val clientEditMessageText = EditMessageText()
-        clientEditMessageText.putData(stringChatId, intMessageId, "ℹ  Спасибо за подтверждение, если возникнет необходимость отменить предстоящий визит, сообщите об этом вашему специалисту.")
-        clientEditMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD835\uDC0E\uD835\uDC0A", "#delmes")
+        clientEditMessageText.putData(stringChatId, intMessageId, text_clientAccepted)
+        clientEditMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD835\uDC0E\uD835\uDC0A", callData_delMessage)
         protectedExecute(clientEditMessageText)
     }
 
 
-    fun changeUserData(stringChatId: String, intMessageId: Int, callBackData: String) {
-        val idData = callBackData.replace("#usr", "").split(" ")
-        val userId = idData[0]
-        val user = userRepository.findById(userId.toLong()).get()
-
-        val textForMessage = "\uD83D\uDD30  Для изменения данных пользователя, введите разделяя символом # следующие данные, в порядке, представленном ниже: " +
-                "\nФамилия: ${user.secondName}\nИмя: ${user.firstName}\nОтчество: ${user.patronymic}\nПрофессия: ${user.profession}" +
-                "\n❗ Неизменяемое поле Chat id: ${user.chatId}\nПароль: ${user.password}\nВремя отправки сообщений клиенту: ${user.sendTime}\nВременная зона: ${user.timeZone}" +
-                "\nОтправка сообщений за дней до приема: ${user.sendBeforeDays}\nДата абонентского платежа: ${user.paymentDate}\nНовый chat id (опционально)" +
-                "\nЗатем отправьте сообщение в чат."
-
-        val editMessageText = EditMessageText().putData(stringChatId, intMessageId, textForMessage)
-        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("❗ Удалить пользователя", "#deluser$userId", "В главное меню  \uD83D\uDD19", "\uD83D\uDD19  Назад в меню")
-        protectedExecute(editMessageText)
-        tempData[stringChatId] = inputChangeUser
-    }
-
-
-
-
-
-
-
-
-    fun cleanTemporaryData(stringChatId: String){
+    fun clientTemporaryData(stringChatId: String){
         tempData[stringChatId] = ""
         comeBackInfo[stringChatId] = ""
-        saveChatId[stringChatId] = 0
+        savedId[stringChatId] = 0
     }
 
 
@@ -2143,30 +1029,135 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
     }
 
 
+    private fun setFullNameInDb(stringChatId: String, longChatId: Long) { // TODO концепция передачи фио через параметры    savedId[key] = longChatId
+        val savedMessageId: Int = saveMessageId[stringChatId] ?: 0
+        val existClient = clientRepository.findById(savedId[stringChatId]!!)
+        val editMessageText = EditMessageText()
 
+        when {
+            existClient.isPresent && existClient.get().chatId != savedId[stringChatId]!! -> {
+                val client = existClient.get()
+                client.firstName = firstName[stringChatId]!!
+                client.secondName = secondName[stringChatId]!!
+                client.patronymic = patronymic[stringChatId]!!
+                clientRepository.save(client)
+                editMessageText.putData(stringChatId, savedMessageId, "✅ ФИО клиента были изменены.")
+            }
 
+            savedId[stringChatId] != null && savedId[stringChatId]!! > 0 -> {
+                val client = ClientData()
+                client.chatId = savedId[stringChatId]!!
+                client.firstName = firstName[stringChatId]!!
+                client.secondName = secondName[stringChatId]!!
+                client.patronymic = patronymic[stringChatId]!!
+                client.specialistId = longChatId
+                client.visitAgreement = if (savedId[stringChatId]!! > 1) "❔" else qSym
+                clientRepository.save(client)
+                editMessageText.putData(stringChatId, savedMessageId,"✅ Клиент добавлен в базу данных.")
+            }
 
-
-
-
-
-
-    /*
-        fun createClientDataBackup(stringChatId: String, intMessageId: Int) {
-        val backupDirectory = config.defaultDirectory + config.clientBackupTitle
-        val clientList = mutableListOf<String>()
-        clientRepository.findAll().forEach { clientList.add(it.toString()) }
-
-        val backupCreator = BackupCreator()
-        val backupFile = backupCreator.receiveBackupFile("clients", clientList)
-        backupCreator.createBackupXml(backupFile, backupDirectory)
-        val textForMessage = "\uD83D\uDD30  Бэкап-файл данных ClientData создан в директории:\n$backupDirectory"
-
-        val editMessageText = EditMessageText().putData(stringChatId, intMessageId, textForMessage)
-        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", "\uD83D\uDD19  Назад в меню", "В backup меню", "Backup меню")
-        protectedExecute(editMessageText)
+            savedId[stringChatId] == null || savedId[stringChatId]!! == 0L -> {
+                editMessageText.putData(stringChatId, savedMessageId, text_inputProfession)
+                tempData[stringChatId] = inputProfession
+            }
         }
-     */
+        editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню",
+                callData_mainMenu)
+        protectedExecute(editMessageText)
+        savedId[stringChatId] = 0
+        registerPassword[stringChatId] = 0
+    }
+
+
+    private fun isSubscriptionExpire(longChatId: Long): Boolean {
+        val user: User = userRepository.findById(longChatId).get()
+        val clientsAmount = clientRepository.findAll().filter { it.specialistId == longChatId }.size
+        return ((LocalDate.now().isAfter(LocalDate.parse(user.paymentDate)) && clientsAmount >= config.freeClientsAmount) ||
+                clientsAmount == config.maxClientsAmount)
+    }
+
+
+    // добавление клиента из меню
+    fun checkTextContentForRegister(stringChatId: String, longChatId: Long, updateMessageText: String, tempDataText: String) {
+        tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
+        val editMessageText = EditMessageText()
+        val savedMessageId: Int = saveMessageId[stringChatId] ?: 0
+
+        when  {
+           updateMessageText.split(" ").size == 3 -> {
+               when (tempDataText){
+                   inputUserSecondName ->  createNewUserFromChat(stringChatId, longChatId, updateMessageText)
+                   inputClientSecondName -> checkDoubleOfClient(stringChatId, longChatId, updateMessageText)
+               }
+            }
+
+            updateMessageText.length <= 15 && !updateMessageText.contains(" ") -> {
+                val secondNameText = updateMessageText.replace("Ё", "Е").replace("ё", "Е")
+                secondName[stringChatId] = secondNameText
+                editMessageText.putData(stringChatId, savedMessageId, text_setName)
+                editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Отмена", callData_mainMenu)
+                protectedExecute(editMessageText)
+                tempData[stringChatId] = inputFirstName
+            }
+
+            else -> {
+                registerPassword[stringChatId] = 0
+                editMessageText.putData(stringChatId, savedMessageId, text_tooLongName)
+                editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню", callData_mainMenu)
+                protectedExecute(editMessageText)
+            }
+        }
+    }
+
+
+    fun createNewUserFromChat(stringChatId: String, longChatId: Long, updateMessageText: String){
+        val splitUpdateMessage = updateMessageText.split(" ")
+        val secondNameText = splitUpdateMessage[0].replace(".", "").replace("Ё", "Е").trim()
+        val firstNameText = splitUpdateMessage[1].replace(".", "").trim()
+        val patronymicText = splitUpdateMessage[2].replace(".", "").trim()
+        checkFullNameLength(stringChatId, longChatId, secondNameText, firstNameText, patronymicText)
+    }
+
+
+    fun checkDoubleOfClient(stringChatId: String, longChatId: Long, updateMessageText: String) {
+        tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
+        val splitUpdateMessage = updateMessageText.split(" ")
+        val secondNameText = splitUpdateMessage[0].replace(".", "").replace("Ё", "Е").trim()
+        val firstNameText = splitUpdateMessage[1].replace(".", "").trim()
+        val patronymicText = splitUpdateMessage[2].replace(".", "").trim()
+        val savedMessageId: Int = saveMessageId[stringChatId] ?: 0
+        val editMessageText = EditMessageText()
+        val clients = clientRepository.findAll()
+
+        if (clients.any { it.specialistId == longChatId && it.secondName == secondNameText && it.firstName ==
+                        firstNameText && it.patronymic == patronymicText } ) {
+            editMessageText.putData(stringChatId, savedMessageId, "$text_nameCoincidePartOne$secondNameText $firstNameText $patronymicText$text_nameCoincidePartTwo")
+            editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  Отмена", callData_mainMenu, "Зарегистрировать", callData_setFullNameInDb)
+        } else {
+            checkFullNameLength(stringChatId, longChatId, secondNameText, firstNameText, patronymicText)
+        }
+        protectedExecute(editMessageText)
+    }
+
+
+    // добавление клиента из меню
+    fun checkFullNameLength(stringChatId: String, longChatId: Long, secondNameText: String, firstNameText: String, patronymicText: String) {
+        val editMessageText = EditMessageText()
+        val savedMessageId: Int = saveMessageId[stringChatId] ?: 0
+
+            if (secondNameText.length > 15 || firstNameText.length > 15 || patronymicText.length > 15){
+                registerPassword[stringChatId] = 0
+                editMessageText.putData(stringChatId, savedMessageId, text_tooLongSecondName)
+                editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню", callData_mainMenu)
+            } else {
+                secondName[stringChatId] = secondNameText
+                firstName[stringChatId] = firstNameText
+                patronymic[stringChatId] = patronymicText
+                setFullNameInDb(stringChatId, longChatId)
+            }
+            protectedExecute(editMessageText)
+        }
+
 
 
 
@@ -2178,71 +1169,99 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
 
 // println("TEST")//TODO
 
-
 }
 
-/*
-    private fun findClient(stringChatId: String, longChatId: Long, secondNameText: String, calBackData: String){ // "#clid"
-        tempData[stringChatId] = ""
-        val savedMessageId: Int = saveStartMessageId[stringChatId] ?: 0
+const val findClient = "FIND_CLIENT"
+const val inputRemark = "INPUT_REMARK"
+const val inputPassword = "INPUT_PASSWORD"
+const val inputFirstName = "INPUT_FIRST_NAME"
+const val inputProfession = "INPUT_PROFESSION"
+const val inputPatronymic = "INPUT_PATRONYMIC"
+const val inputChangeUser = "INPUT_CHANGE_USER"
+const val inputOldPassword = "INPUT_OLD_PASSWORD"
+const val inputUploadBackup = "INPUT_UPLOAD_BACKUP"
+const val inputMessageForAll = "INPUT_MESSAGE_FOR_ALL"
+const val inputRepairPassword = "INPUT_REPAIR_PASSWORD"
+const val inputSupportMessage = "INPUT_SUPPORT_MESSAGE"
+const val inputMessageForUser = "INPUT_MESSAGE_FOR_USER"
+const val inputLoadUserBackup = "INPUT_LOAD_USER_BACKUP"
+const val inputSaveUserBackup = "INPUT_SAVE_USER_BACKUP"
+const val inputUserSecondName = "INPUT_USER_SECOND_NAME"
+const val inputSaveClientBackup = "INPUT_SAVE_CLIENT_BACKUP"
+const val inputLoadClientBackup = "INPUT_LOAD_CLIENT_BACKUP"
+const val inputClientSecondName = "INPUT_CLIENT_SECOND_NAME"
+const val inputTextForStartMessage = "INPUT_FOR_START_MESSAGE"
 
-        val clients = clientRepository.findAll().filter { it.specialistId == longChatId &&
-        it.secondName.contains(secondNameText, true) }.filter { it.secondName.first().lowercase() ==
-        secondNameText.first().lowercase() }.sortedBy { it.secondName }
-
-        val textForMessage: String
-        val editMessageText = EditMessageText()
-
-        if(clients.isEmpty()){
-            textForMessage = "ℹ  Клиента с таким сочетанием символов в фамилии не найдено."
-            editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню",
-            "\uD83D\uDD19  Назад в меню")
-
-        } else {
-            textForMessage = "\uD83D\uDD30 Выберите клиента/пациента из списка:"
-            val inlineKeyboardMarkup = InlineKeyboardMarkup()
-            val rowsInline = ArrayList<List<InlineKeyboardButton>>()
-            for (elem in clients) {
-                val rowInlineButton = ArrayList<InlineKeyboardButton>()
-                val button = InlineKeyboardButton()
-                button.putData(elem.secondName + " " +  elem.firstName, calBackData + elem.clientId)
-                rowInlineButton.add(button)
-                rowsInline.add(rowInlineButton)
-            }
-
-            val rowInlineButton = ArrayList<InlineKeyboardButton>()
-            val returnButton = InlineKeyboardButton()
-            returnButton.putData("\uD83D\uDD19  Назад в меню", "\uD83D\uDD19  Назад в меню")
-            rowInlineButton.add(returnButton)
-            rowsInline.add(rowInlineButton)
-
-            inlineKeyboardMarkup.keyboard = rowsInline
-            editMessageText.replyMarkup = inlineKeyboardMarkup
-        }
-        val i: Iterable<ClientData> = clientRepository.findAll()
-        editMessageText.putData(stringChatId, savedMessageId, textForMessage)
-        protectedExecute(editMessageText)
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- */
+const val qSym = " ？"
+const val callData_clientData = "#cldata"
+const val callData_callBackClientId = "#clid"
+const val callData_clientForAppointment = "#findcli"
+const val callData_clientForSettingsMenu = "#finmenu"
+const val callData_addNewClient =  "Добавить нового клиента/пациента"
+const val callData_generateCode = "Генерировать код для клиента" // "Генерировать код и добавить клиента"
+const val callData_addCommonClient = "Добавить клиента без кода" // Добавить клиента без Telegram
+const val callData_startBot = "/start"
+const val callData_helpCommand = "/help"
+const val callData_deleteUser = "/deletedata"
+const val callData_findClient = "#getmenu"
+const val callData_chatBackup = "#defaultchatbackup"
+const val callData_specMenu = "Меню специалиста"
+const val callData_myAppointment = "\uD83D\uDCC5  Посмотреть мою запись"
+const val callData_myClients = "#mycli"
+const val callData_appointmentToMe = "Посмотреть запись ко мне"
+const val callData_allClients = "#allcli"
+const val callData_clientRemark = "Заметки клиента"
+const val callData_delClientRemark = "#delrem"
+const val callData_timeDown = "#timedwn"
+const val callData_timeUp = "#timeup"
+const val callData_dayDown = "#daydwn"
+const val callData_dayUp = "#dayup"
+const val callData_zoneDown = "#zonedwn"
+const val callData_zoneUp = "#zoneup"
+const val callData_clientSettingMenu = "#getmenu"
+const val callData_appointmentDay = "@"
+const val callData_appointmentHour = "&"
+const val callData_appointmentMin = "#hou"
+const val callData_cancelAppointment = "#disapp"
+const val callData_approveAppointment = "#approve"
+const val callData_changeUser = "#usr"
+const val callData_appointmentToSpec = "Моя запись к специалисту"
+const val callData_setPassword = "Установить пароль"
+const val callData_cancelClientAppointment = "#cancapp"
+const val callData_setFullNameInDb = "#acceptregister"
+const val callData_defaultUserBackup = "#createservuse"
+const val callData_defaultClientBackup = "#createservcli"
+const val callData_cleanChatMenu = "Очистить чат"
+const val callData_cleanChat = "#cleanchat"
+const val callData_editeUser = "Редактировать пользователя"
+const val callData_messageToUser = "Сообщение пользователю"
+const val callData_messageToAllUsers = "Сообщение всем пользователям"
+const val callData_messageToMainMenu = "StartMessage текст"
+const val callData_saveUserBackup = "Сохранить user_backup"
+const val callData_saveClientBackup = "Сохранить client_backup"
+const val callData_backupInClient = "Backup в client сервер"
+const val callData_backupInUser = "Backup в user сервер"
+const val callData_loadBackupClient = "#loadbackupcli"
+const val callData_loadBackupUser = "#loadbackupuse"
+const val callData_delServerMenu = "❗ Удалить сервер"
+const val callData_delUserServer = "❗ Удалить user сервер"
+const val callData_delClientServer = "❗ Удалить client сервер"
+const val callData_backupToChat = "Выгрузить backup в чат"
+const val callData_regAsSpec = "Зарегистрироваться как специалист"
+const val callData_clientBaseMenu = "Работа с базой клиентов/пациентов"
+const val callData_setAppointment = "Записать на приём"
+const val callData_myAccount = "⚙  Моя учетная запись"
+const val callData_deleteClientMenu = "Удалить клиента"
+const val callData_deleteClient = "#delcli"
+const val callData_myData = "#mydata"
+const val callData_messageToSupport = "#support"
+const val callData_paymentMenu = "#payment"
+const val callData_repairAccount = "Восстановить аккаунт"
+const val callData_editeUsername = "Редактировать мои ФИО"
+const val callData_registration = "#reg"
+const val callData_delAllUserData = "#delmydata"
+const val callData_editeClientName = "Редактировать ФИО клиента"
+const val callData_removeAppointment = "Выписать клиента"
+const val callData_backupMenu = "Backup меню"
+const val callData_delMessage = "#delmes"
+const val callData_mainMenu = "\uD83D\uDD19  Назад в меню"
