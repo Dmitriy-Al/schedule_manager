@@ -20,5 +20,14 @@ class BackupCreator {
             fileOutputStream.close()
     }
 
+
+    fun createClientListTxt(backupFile: String, directory: String) {
+        val fileOutputStream = FileOutputStream(directory)
+        fileOutputStream.write(backupFile.toByteArray())
+        fileOutputStream.flush()
+        fileOutputStream.close()
+    }
+
+
 }
 

@@ -41,6 +41,11 @@ open class ClientData {
     open var visitHistory: String = ""
 
 
+    fun getFullName(): String {
+        return "$secondName $firstName $patronymic"
+    }
+
+
     override fun toString(): String {
         return "<client secondName=\"$secondName\" firstName=\"$firstName\" patronymic=\"$patronymic\" specialistId=" +
                 "\"$specialistId\" clientId=\"$clientId\" chatId=\"$chatId\" visitAgreement=\"$visitAgreement\" appointmentDate=" +

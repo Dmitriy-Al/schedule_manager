@@ -13,7 +13,6 @@ private val usersList = mutableListOf<User>()
 class ServerBackup : DefaultHandler() {
 
 
-
     fun startBackup(directory: String) {
         val factory = SAXParserFactory.newInstance()
         val parser = factory.newSAXParser()

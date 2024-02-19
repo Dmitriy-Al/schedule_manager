@@ -3,15 +3,18 @@ package aldmitry.dev.personalmanager.service
 import aldmitry.dev.personalmanager.apptexts.*
 import aldmitry.dev.personalmanager.backup.BackupCreator
 import aldmitry.dev.personalmanager.backup.ServerBackup
+import aldmitry.dev.personalmanager.extendfunctions.protectedExecute
 import aldmitry.dev.personalmanager.extendfunctions.putData
 import aldmitry.dev.personalmanager.model.ClientData
 import aldmitry.dev.personalmanager.model.ClientDataDao
 import aldmitry.dev.personalmanager.model.User
 import aldmitry.dev.personalmanager.model.UserDao
+import org.telegram.telegrambots.meta.api.methods.invoices.CreateInvoiceLink
 import org.telegram.telegrambots.meta.api.methods.send.SendDocument
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText
 import org.telegram.telegrambots.meta.api.objects.InputFile
+import org.telegram.telegrambots.meta.api.objects.payments.LabeledPrice
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton
 import java.io.File
@@ -306,6 +309,10 @@ class BotMenuFunction : BotMenuInterface {
         val changeDataButton = InlineKeyboardButton()
         changeDataButton.putData("Мои данные", callData_myData)
         fifthRowInlineButton.add(changeDataButton)
+
+        val getBackupButton = InlineKeyboardButton()
+        getBackupButton.putData("Backup-файл", "$callData_getBackup$stringChatId")
+        fifthRowInlineButton.add(getBackupButton)
 
         val paymentButton = InlineKeyboardButton()
         paymentButton.putData("Абонемент", callData_paymentMenu)
@@ -806,7 +813,7 @@ class BotMenuFunction : BotMenuInterface {
         val localDate = LocalDate.now()
         val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
         clientRepository.findAll().filter { localDate.minusDays(1).toString() == it.appointmentDate &&
-                it.visitAgreement != "✖"}.forEach { it.visitHistory = "${it.visitHistory}\n• ${formatter.format(localDate
+                it.visitAgreement != xSym}.forEach { it.visitHistory = "${it.visitHistory}\n• ${formatter.format(localDate
                 .minusDays(1))} в ${it.appointmentTime}"; clientRepository.save(it) }
     }
 
@@ -814,8 +821,8 @@ class BotMenuFunction : BotMenuInterface {
     fun removeClientsAppointment(clientRepository: ClientDataDao) {
         val localDate = LocalDate.now()
         clientRepository.findAll().filter { localDate.minusDays(1).toString() == it.appointmentDate &&
-                it.visitAgreement != "❔" && it.visitAgreement != qSym}.forEach { it.appointmentDate = "";
-            it.appointmentTime = ""; it.visitAgreement = "❔"; clientRepository.save(it) }
+            it.visitAgreement != wqSym && it.visitAgreement != qSym}.forEach {
+            it.appointmentDate = ""; it.appointmentTime = ""; it.visitAgreement = wqSym; clientRepository.save(it) }
     }
 
 
@@ -896,7 +903,7 @@ class BotMenuFunction : BotMenuInterface {
         val editMessageText = EditMessageText()
         editMessageText.putData(stringChatId, intMessageId, textForMessage)
         editMessageText.replyMarkup = receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню",
-                callData_mainMenu, "В backup меню", callData_backupMenu)
+        callData_mainMenu, "В backup меню", callData_backupMenu)
         return  editMessageText
     }
 
@@ -984,7 +991,7 @@ class BotMenuFunction : BotMenuInterface {
 
 
     fun createDefaultBackup(stringChatId: String, intMessageId: Int, backupTitle: String, elementList: List<String>): EditMessageText {
-        val backupDirectory: String = config.defaultDirectory + backupTitle // TODO     elementTitle   elementList
+        val backupDirectory: String = config.defaultDirectory + backupTitle
         val backupCreator = BackupCreator()
         val backupFile = backupCreator.receiveBackupFile(backupTitle, elementList)
         backupCreator.createBackupXml(backupFile, backupDirectory)
@@ -1050,8 +1057,6 @@ class BotMenuFunction : BotMenuInterface {
         val clients = clientRepository.findAll().filter { it.specialistId == longChatId }
         val amount = clients.size
         val user = userRepository.findById(longChatId).get()
-
-        val text = "$text_clientLimitOne${config.maxClientsAmount}$text_clientLimitTwo${config.maxClientsAmount}$text_clientLimitThree"
 
         var textForMessage = "$text_clientLimitFour$amount\n\n"
 
@@ -1230,5 +1235,71 @@ class BotMenuFunction : BotMenuInterface {
         }
         return editMessageText
     }
+
+
+    fun receiveInvoiceLink(stringChatId: String, textForDescription: String): CreateInvoiceLink {
+    val labeledPriceList: List<LabeledPrice> = listOf(LabeledPrice("Оплата абонемента", config.subscriptionPrice * 100))
+        return CreateInvoiceLink("Абонентская плата", // @NonNull String title
+            textForDescription, // @NonNull String description
+            stringChatId, // @NonNull String payload - определенная полезная нагрузка счета-фактуры, 1-128 байт. Информация не видна пользователю, используйте для своих внутренних процессов
+            config.payToken, // @NonNull String providerToken - токен банка/провайдера платежей - "381764678:TEST:62053", // @NonNull String providerToken - Юкасса токен (Юкасса подключает физлиц)
+            "RUB", // @NonNull String currency (валюта)
+            labeledPriceList, // @NonNull List<LabeledPrice> prices
+            "https://disk.yandex.ru/i/AbFv3vCPhpVypA", // String photoUrl - фотография в меню покупки
+            null, null, null, //  Integer photoSize, Integer photoWidth, Integer photoHeight
+
+            // Boolean needName, Boolean needPhoneNumber, Boolean needEmail, Boolean needShippingAddress, Boolean isFlexible, Boolean sendPhoneNumberToProvider, Boolean sendEmailToProvider
+            false, false, false, false /* needShippingAddress */, false /* isFlexible - цена зависит от доставки */, false/* sendPhoneNumberToProvider */, false,
+            config.bill, // String providerData - JSON-сериализованные данные о счете-фактуре, которые будут переданы поставщику платежей. Подробное описание обязательных полей должно быть предоставлено поставщиком платежных услуг //TODO
+            0, // Integer maxTipAmount - максимальный размер чаевых
+            null)
+    }
+
+
+    fun receivePayMenu(stringChatId: String, intMessageId: Int, payLync: String, textForMessage: String): EditMessageText {
+        val editMessageText = EditMessageText()
+        editMessageText.putData(stringChatId, intMessageId, textForMessage)
+        val inlineKeyboardMarkup = InlineKeyboardMarkup()
+        val rowsInline = ArrayList<List<InlineKeyboardButton>>()
+        val firstRowInlineButton = ArrayList<InlineKeyboardButton>()
+
+        val firstButton = InlineKeyboardButton()
+        firstButton.putData("\uD83D\uDD19  Отмена", callData_startMenu)
+        firstRowInlineButton.add(firstButton)
+
+        val secondButton = InlineKeyboardButton()
+        secondButton.putData("Оплатить", callData_startMenu)
+        secondButton.url = payLync
+        firstRowInlineButton.add(secondButton)
+
+        rowsInline.add(firstRowInlineButton)
+        inlineKeyboardMarkup.keyboard = rowsInline
+        editMessageText.replyMarkup = inlineKeyboardMarkup
+        return editMessageText
+    }
+
+
+    fun receiveClientList(userId: Long, clientRepository: ClientDataDao): String {
+        val stringBuilder = StringBuilder()
+        clientRepository.findAll().filter { it.specialistId == userId }.sortedBy { it.appointmentDate }.
+        forEach { stringBuilder.append("${it.getFullName()}, запись: ${it.appointmentDate} - ${it.appointmentTime}; заметки клиента: ${it.remark}.\n") }
+        return stringBuilder.toString()
+    }
+
+
+    fun receiveBackupList(stringChatId: String, fileDirectory: String): SendDocument {
+        val sendDocument = SendDocument()
+        sendDocument.document = InputFile(File(fileDirectory))
+        sendDocument.caption = text_backupText
+        sendDocument.replyMarkup = receiveOneButtonMenu("\uD835\uDC0E\uD835\uDC0A", callData_delMessage)
+        sendDocument.disableNotification = true
+        sendDocument.chatId = stringChatId
+        return sendDocument
+    }
+
+
+
+
+
 
 }
