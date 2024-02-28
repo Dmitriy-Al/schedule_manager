@@ -12,12 +12,15 @@ import org.telegram.telegrambots.meta.bots.AbsSender
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException
 
 
+// Расширенные функции библиотеки Telegrambots
+
+/** Текст для клавиши и callbackData в единой функции */
 fun InlineKeyboardButton.putData(text: String, callbackData: String) {
     this.text = text
     this.callbackData = callbackData
 }
 
-
+/** Свойства EditMessageText добавляются в параметре функции putData */
 fun EditMessageText.putData(stringChatId: String, intMessageId: Int, messageText: String): EditMessageText {
     this.chatId = stringChatId
     this.messageId = intMessageId
@@ -25,14 +28,15 @@ fun EditMessageText.putData(stringChatId: String, intMessageId: Int, messageText
     return this
 }
 
-
+/** Свойства DeleteMessage добавляются в параметре функции putData */
 fun DeleteMessage.putData(stringChatId: String, messageId: Int): DeleteMessage {
     this.chatId = stringChatId
     this.messageId = messageId
     return this
 }
 
-
+/** Процесс execute() (отправка пользователю) в функциях представленных ниже
+ * происходит с отловом ошибок */
 fun AbsSender.protectedExecute(sendMessage: SendMessage): Int {
     var messageId = 0
     try {
@@ -51,7 +55,6 @@ fun AbsSender.protectedExecute(editMessageText: EditMessageText) {
     } catch (e: TelegramApiException) {
         val logger = LoggerFactory.getLogger("extendfunctions <protectedExecute editMessageText>")
         logger.error(e.message)
-        println("Err >>>  $e")
     }
 }
 
@@ -61,7 +64,7 @@ fun AbsSender.protectedExecute(sendDocument: SendDocument) {
         this.execute(sendDocument)
     } catch (e: TelegramApiException) {
         val logger = LoggerFactory.getLogger("extendfunctions <protectedExecute SendDocument>")
-        println("Err >>>  $e")
+        logger.error(e.message)
     }
 }
 
@@ -80,8 +83,8 @@ fun AbsSender.protectedExecute(createInvoiceLink: CreateInvoiceLink): String {
     try {
         link = this.execute(createInvoiceLink)
     } catch (e: TelegramApiException) {
-        // without logger: exceptions here is ordinary case, because there are often no messages to delete
-        println("Err >>>  $e")
+        val logger = LoggerFactory.getLogger("extendfunctions <protectedExecute createInvoiceLink>")
+        logger.error(e.message)
     }
     return link
 }
@@ -91,7 +94,7 @@ fun AbsSender.protectedExecute(answerPreCheckoutQuery: AnswerPreCheckoutQuery) {
     try {
         this.execute(answerPreCheckoutQuery)
     } catch (e: TelegramApiException) {
-        // without logger: exceptions here is ordinary case, because there are often no messages to delete
-        println("Err >>>  $e")
+        val logger = LoggerFactory.getLogger("extendfunctions <protectedExecute answerPreCheckoutQuery>")
+        logger.error(e.message)
     }
 }

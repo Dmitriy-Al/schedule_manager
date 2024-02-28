@@ -1,5 +1,4 @@
 <configuration>
-
     <!-- <lin> <property name="HOME_LOG" value="/home/dmitry/Documents/personal_manager/pm.log"/> -->
     <!-- <win> <property name="HOME_LOG" value="C:/personal_manager/pm.log"/> -->
     <property name="HOME_LOG" value="/home/dmitry/Documents/personal_manager/pm.log"/>

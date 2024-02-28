@@ -4,6 +4,7 @@ import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Id
 
+// Любой пользователь бота автоматически становится user; user может авторизоваться и получить права специалиста
 @Entity(name = "user_data")
 open class User {
 

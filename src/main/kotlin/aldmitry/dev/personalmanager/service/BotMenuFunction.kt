@@ -3,7 +3,7 @@ package aldmitry.dev.personalmanager.service
 import aldmitry.dev.personalmanager.apptexts.*
 import aldmitry.dev.personalmanager.backup.BackupCreator
 import aldmitry.dev.personalmanager.backup.ServerBackup
-import aldmitry.dev.personalmanager.extendfunctions.protectedExecute
+import aldmitry.dev.personalmanager.config.*
 import aldmitry.dev.personalmanager.extendfunctions.putData
 import aldmitry.dev.personalmanager.model.ClientData
 import aldmitry.dev.personalmanager.model.ClientDataDao
@@ -20,14 +20,25 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import java.io.File
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.util.*
+import kotlin.collections.ArrayList
+import kotlin.collections.HashMap
 
 class BotMenuFunction : BotMenuInterface {
 
-    private val specialistMenuList = listOf(callData_setAppointment, callData_appointmentToMe, callData_addNewClient, callData_clientBaseMenu, callData_myAccount)
+    // Список с разделами главного меню администратора
+    private val adminMenuList = listOf(callData_loadSettings, callData_editeUser, callData_messageToAllUsers,
+    callData_messageToUser, callData_messageToMainMenu, callData_specMenu, callData_cleanChatMenu, callData_backupMenu)
+
+    // Список с разделами главного меню специалиста
+    private val specialistMenuList = listOf(callData_setAppointment, callData_appointmentToMe, callData_addNewClient,
+            callData_clientBaseMenu, callData_myAccount)
+
+    // Список с разделами главного меню пользователя-клиента
     private val clientMenuList = listOf(callData_myAppointment, callData_regAsSpec)
     
 
-    // Экранные кнопки
+    // Экранная клавиатура
     override fun createButtonSet(textForButton: List<String>): InlineKeyboardMarkup {
         val inlineKeyboardMarkup = InlineKeyboardMarkup()
         val rowsInline = ArrayList<List<InlineKeyboardButton>>()
@@ -43,7 +54,7 @@ class BotMenuFunction : BotMenuInterface {
         return inlineKeyboardMarkup
     }
 
-    // Экранные кнопки с добавленным текстом для callBackData
+    // Экранная клавиатура с добавленным текстом для callBackData
     override fun createDataButtonSet(textForButton: List<String>, callBackData: String): InlineKeyboardMarkup {
         val inlineKeyboardMarkup = InlineKeyboardMarkup()
         val rowsInline = ArrayList<List<InlineKeyboardButton>>()
@@ -59,7 +70,7 @@ class BotMenuFunction : BotMenuInterface {
         return inlineKeyboardMarkup
     }
 
-    // Меню с одной кнопкой
+    // Меню с одной экранной клавишей
     override fun receiveOneButtonMenu(buttonText: String, buttonData: String): InlineKeyboardMarkup {
         val inlineKeyboardMarkup = InlineKeyboardMarkup()
         val rowsInline = ArrayList<List<InlineKeyboardButton>>()
@@ -73,8 +84,9 @@ class BotMenuFunction : BotMenuInterface {
         return inlineKeyboardMarkup
     }
 
-    // Меню с двумя кнопками
-    override fun receiveTwoButtonsMenu(firstButtonText: String, firstData: String, secondButtonText: String, secondData: String): InlineKeyboardMarkup {
+    // Меню с двумя экранными клавишами
+    override fun receiveTwoButtonsMenu(firstButtonText: String, firstData: String, secondButtonText: String,
+                                       secondData: String): InlineKeyboardMarkup {
         val inlineKeyboardMarkup = InlineKeyboardMarkup()
         val rowsInline = ArrayList<List<InlineKeyboardButton>>()
         val firstRowInlineButton = ArrayList<InlineKeyboardButton>()
@@ -92,7 +104,7 @@ class BotMenuFunction : BotMenuInterface {
         return inlineKeyboardMarkup
     }
 
-
+    // Отправка документа в чат
     fun sendBackup(longChatId: Long, textForMessage: String, backupDirectory: String): SendDocument {
         val sendDocument = SendDocument()
         sendDocument.setChatId(longChatId)
@@ -101,23 +113,24 @@ class BotMenuFunction : BotMenuInterface {
         return sendDocument
     }
 
-
+    // Сообщение с информацией об истечении срока абонемента
     fun receiveSubscriptionMessage(intMessageId: Int, stringChatId: String): EditMessageText {
         val editMessageText = EditMessageText() // в период действия абонемента
-        val textForMessage = "$text_limitPartOne${config.freeClientsAmount}$text_limitPartTwo${config.maxClientsAmount}."
+        val textForMessage = "$text_limitPartOne${config_freeClientsAmount}$text_limitPartTwo${config_maxClientsAmount}."
         editMessageText.putData(stringChatId, intMessageId, textForMessage)
-        editMessageText.replyMarkup = receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", callData_mainMenu, "Абонемент", callData_paymentMenu)
+        editMessageText.replyMarkup = receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", callData_mainMenu,
+                "Абонемент", callData_paymentMenu)
         return editMessageText
     }
 
-
+    // Меню начального экрана клиента-user
     fun receiveClientMessage(stringChatId: String): SendMessage {
         val sendMessage = SendMessage(stringChatId, text_clientStartMessage)
         sendMessage.replyMarkup = createButtonSet(clientMenuList)
         return sendMessage
     }
 
-
+    // Информация для клиента о записи к специалистам
     fun receiveClientEditMessage (stringChatId: String, intMessageId: Int): EditMessageText {
         val editMessageText = EditMessageText()
         editMessageText.putData(stringChatId, intMessageId, text_clientStartMessage)
@@ -125,41 +138,35 @@ class BotMenuFunction : BotMenuInterface {
         return editMessageText
     }
 
-
-    fun receiveAdministratorSendMessage(stringChatId: String, textForStartMessage: String, saveMessageIdSize: Int, users: Iterable<User>, clientData: Iterable<ClientData>): SendMessage {
-        val specialists = users.filter { it.profession.isNotEmpty() }
-        val textForMessage = "$textForStartMessage\uD83D\uDD30  Меню администратора.\nВсего пользователей: ${users.count()}" +
-                "\nВсего специалистов: ${specialists.count() - 1}\nДобавлено клиентов: ${clientData.count()}\nВсего стартовых сообщений: $saveMessageIdSize"
-        val sendMessage = SendMessage(stringChatId, textForMessage)
-        val settingList = listOf(callData_editeUser, callData_messageToAllUsers, callData_messageToUser, callData_messageToMainMenu, callData_specMenu, callData_cleanChatMenu, callData_backupMenu)
-        sendMessage.replyMarkup = createButtonSet(settingList)
-        return sendMessage
-    }
-
-
-    fun receiveSpecialistSendMessage(longChatId: Long, stringChatId: String, textForStartMessage: String, clientData: Iterable<ClientData>): SendMessage {
-        val textForMessage = receiveTextForStartMessage(longChatId, textForStartMessage, clientData)
+    // Меню начального экрана специалиста-user
+    fun receiveSpecialistSendMessage(longChatId: Long, stringChatId: String, textForStartMessage: String,
+                                     clientRepository: ClientDataDao): SendMessage {
+        val textForMessage = receiveTextForStartMessage(longChatId, textForStartMessage, clientRepository)
         val sendMessage = SendMessage(stringChatId, textForMessage)
         sendMessage.replyMarkup = createButtonSet(specialistMenuList)
         return sendMessage
     }
 
-
-    fun receiveSpecialistEditMessage(longChatId: Long, stringChatId: String, intMessageId: Int, textForStartMessage: String, clientData: Iterable<ClientData>): EditMessageText {
-        val textForMessage = receiveTextForStartMessage(longChatId, textForStartMessage, clientData)
+    // Меню начального экрана специалиста-user
+    fun receiveSpecialistEditMessage(longChatId: Long, stringChatId: String, intMessageId: Int,
+                                     textForStartMessage: String, clientRepository: ClientDataDao): EditMessageText {
+        val textForMessage = receiveTextForStartMessage(longChatId, textForStartMessage, clientRepository)
         val editMessageText = EditMessageText()
         editMessageText.putData(stringChatId, intMessageId, textForMessage)
         editMessageText.replyMarkup = createButtonSet(specialistMenuList)
         return editMessageText
     }
 
-
-    private fun receiveTextForStartMessage(longChatId: Long, textForStartMessage: String, clientData: Iterable<ClientData>): String {
+    // Текст начального экрана для специалиста-user
+    private fun receiveTextForStartMessage(longChatId: Long, textForStartMessage: String,
+                                           clientRepository: ClientDataDao): String {
         val textForMessageLength: Int
         val localDate = LocalDate.now()
         val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
         val textForMessage = StringBuilder()
-        val nextDate: String? =clientData.filter { it.specialistId == longChatId && it.appointmentDate.length == 10 && localDate.isBefore(LocalDate.parse(it.appointmentDate)) }.minByOrNull { it.appointmentDate }?.appointmentDate
+        val clientData = clientRepository.findAll()
+        val nextDate: String? = clientData.filter { it.specialistId == longChatId && it.appointmentDate.length == 10 &&
+                localDate.isBefore(LocalDate.parse(it.appointmentDate)) }.minByOrNull { it.appointmentDate }?.appointmentDate
 
         if (nextDate.isNullOrEmpty()) {
             textForMessage.append("$text_info$textForStartMessage$text_infoOne")
@@ -167,38 +174,64 @@ class BotMenuFunction : BotMenuInterface {
             textForMessage.append("$text_info$textForStartMessage$text_infoTwo${formatter.format(LocalDate.parse(nextDate))}:")
         }
 
-        clientData.filter { it.specialistId == longChatId && it.appointmentDate == nextDate }.sortedBy { it.appointmentTime}.forEach { textForMessage.append("\n${it.visitAgreement} ${it.appointmentTime} - ${it.secondName} ${it.firstName.first()}. ${it.patronymic.first()}.") }
+        clientData.filter { it.specialistId == longChatId && it.appointmentDate == nextDate }.sortedBy { it.appointmentTime}.
+        forEach { textForMessage.append("\n${it.visitAgreement} ${it.appointmentTime} - ${it.secondName} " +
+                "${it.firstName.first()}. ${it.patronymic.first()}.") }
 
         textForMessage.append(text_todayAppointment)
         textForMessageLength = textForMessage.length
-        clientData.filter { it.specialistId == longChatId && it.appointmentDate.length == 10 && it.appointmentDate == localDate.toString() && it.visitAgreement != "✖" }.sortedBy { it.appointmentTime}.forEach { textForMessage.append("\n• ${it.appointmentTime} - ${it.secondName} ${it.firstName.first()}. ${it.patronymic.first()}.") }
+        clientData.filter { it.specialistId == longChatId && it.appointmentDate.length == 10 && it.appointmentDate ==
+                localDate.toString() && it.visitAgreement != "✖" }.sortedBy { it.appointmentTime}.forEach { textForMessage.
+        append("\n• ${it.appointmentTime} - ${it.secondName} ${it.firstName.first()}. ${it.patronymic.first()}.") }
         if (textForMessageLength == textForMessage.length) textForMessage.append(" нет.")
         return textForMessage.toString()
     }
 
-
+    // Сообщение от администратора user
     fun sendMessageToUser(updateMessageText: String): SendMessage {
         val splitMessageText = updateMessageText.split("#")
         val sendMessage = SendMessage(splitMessageText[0], "$text_adminMessage${splitMessageText[1]}")
-        sendMessage.replyMarkup = receiveOneButtonMenu("\uD835\uDC0E\uD835\uDC0A", callData_delMessage)
+        sendMessage.replyMarkup = receiveOneButtonMenu(okButton, callData_delMessage)
         return sendMessage
     }
 
-
+    // Уведомление администратора о том, что сообщение было отправлено user
     fun sendMessageToAdminNotification(stringChatId: String, intMessageId: Int): EditMessageText {
         val editMessageText = EditMessageText().putData(stringChatId, intMessageId, text_sentMessage)
         editMessageText.replyMarkup = receiveOneButtonMenu("\uD83D\uDD19  В главное меню", callData_mainMenu)
         return editMessageText
     }
 
-
-    fun specialistUserMenu(longChatId: Long, stringChatId: String, intMessageId: Int, textForStartMessage: String, clientRepository: ClientDataDao): EditMessageText {
-        return  receiveSpecialistEditMessage(longChatId, stringChatId, intMessageId, textForStartMessage, clientRepository.findAll())
+    // Меню специалиста
+    fun specialistUserMenu(longChatId: Long, stringChatId: String, intMessageId: Int, textForStartMessage: String,
+                           clientRepository: ClientDataDao): EditMessageText {
+        return  receiveSpecialistEditMessage(longChatId, stringChatId, intMessageId, textForStartMessage, clientRepository)
     }
 
+    // Меню начального экрана администратора
+    fun receiveAdministratorSendMessage(stringChatId: String, textForStartMessage: String, saveMessageIdSize: Int,
+                                        userRepository: UserDao, clientRepository: ClientDataDao): SendMessage {
+        val specialists = userRepository.findAll().filter { it.profession.isNotEmpty() }
+        val textForMessage = "$textForStartMessage\uD83D\uDD30  Меню администратора.\npayToken: $config_payToken" +
+                "\nБесплатный период использования (мес.): $config_trialPeriod\nДосрочная оплата абонемента за (дней): " +
+                "$config_paymentBefore\nБесплатно добавляемых клиентов: ${config_freeClientsAmount}\nМаксимальное " +
+                "количество добавляемых клиентов: $config_maxClientsAmount\nСрок действия абонемента (дней): " +
+                "$config_subscriptionDays\nЦена абонемента (руб.): $config_subscriptionPrice\nВремя отправки " +
+                "администратору backup (час Мск.): $config_createBackupTime\nuserBackupTitle: " +
+                "$config_userBackupTitle\nclientBackupTitle: $config_userBackupTitle\nuserXmlGroupTitle: " +
+                "$config_userXmlGroupTitle\nclientXmlGroupTitle: ${config_clientXmlGroupTitle}\nbackupDirectory: " +
+                "$config_backupDirectory\nадрес backup-списка для пользователя: $config_backupListDirectory\n" +
+                "Всего пользователей: ${userRepository.count()}\nВсего специалистов: ${specialists.count() - 1}\n" +
+                "Добавлено клиентов: ${clientRepository.findAll().count()}\nВсего стартовых сообщений: $saveMessageIdSize"
+        val sendMessage = SendMessage(stringChatId, textForMessage)
+        val settingList: List<String> = adminMenuList
+        sendMessage.replyMarkup = createButtonSet(settingList)
+        return sendMessage
+    }
 
-
-    fun receiveFindClientKeyboard(stringChatId: String, intMessageId: Int, messageText: String, callBackData: String): EditMessageText {
+    // Меню поиска клиента по нажатию клавиши с первой буквой фамилии
+    fun receiveFindClientKeyboard(stringChatId: String, intMessageId: Int, messageText: String,
+                                  callBackData: String): EditMessageText {
         val editMessageText = EditMessageText()
         editMessageText.putData(stringChatId, intMessageId, messageText)
 
@@ -254,16 +287,17 @@ class BotMenuFunction : BotMenuInterface {
         rowsInline.add(fifthRowInlineButton)
         inlineKeyboardMarkup.keyboard = rowsInline
         editMessageText.replyMarkup = inlineKeyboardMarkup
-
         return editMessageText
     }
 
-
+    // Меню с настройками учетной записи специалиста-user
     fun receiveUserSettingsMenu(stringChatId: String, intMessageId: Int, user: User): EditMessageText {
         val editMessageText = EditMessageText()
         val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
-        val textForMessage = "$text_userSettingsMenuOne${user.sendTime}$text_userSettingsMenuTwo${user.sendBeforeDays}$text_userSettingsMenuThree${user.timeZone}" +
-                "\n\uD83D\uDD38 ФИО: ${user.secondName} ${user.firstName} ${user.patronymic}\n\uD83D\uDD38 Специализация: ${user.profession}" +
+        val textForMessage = "$text_userSettingsMenuOne${user.sendTime}$text_userSettingsMenuTwo" +
+                "${user.sendBeforeDays}$text_userSettingsMenuThree${user.timeZone}" +
+                "\n\uD83D\uDD38 ФИО: ${user.secondName} ${user.firstName} ${user.patronymic}\n\uD83D\uDD38 " +
+                "Специализация: ${user.profession}" +
                 "$text_userSettingsMenuFour${formatter.format(LocalDate.parse(user.paymentDate))}"
 
         editMessageText.putData(stringChatId, intMessageId, textForMessage)
@@ -335,68 +369,32 @@ class BotMenuFunction : BotMenuInterface {
         rowsInline.add(seventhRowInlineButton)
         inlineKeyboardMarkup.keyboard = rowsInline
         editMessageText.replyMarkup = inlineKeyboardMarkup
-
         return editMessageText
     }
 
-
-    fun receiveFindClientMenu(intMessageId: Int, stringChatId: String, longChatId: Long, secondNameText: String,
-                              calBackData: String, clients: Iterable<ClientData>): EditMessageText {
-        val client = clients.filter { it.specialistId == longChatId && it.secondName.contains(secondNameText,
-        true) }.filter { it.secondName.first().lowercase() == secondNameText.first().lowercase() }.sortedBy { it.secondName }
-
-        val textForMessage: String
-        val editMessageText = EditMessageText()
-
-        if(client.isEmpty()){
-            textForMessage = text_clientNotFound
-            editMessageText.replyMarkup = receiveOneButtonMenu("\uD83D\uDD19  Назад в меню",
-                    callData_mainMenu)
-
-        } else {
-            textForMessage = text_chooseClient
-            val inlineKeyboardMarkup = InlineKeyboardMarkup()
-            val rowsInline = ArrayList<List<InlineKeyboardButton>>()
-            for (elem in client) {
-                val rowInlineButton = ArrayList<InlineKeyboardButton>()
-                val button = InlineKeyboardButton()
-                button.putData(elem.secondName + " " +  elem.firstName, calBackData + elem.clientId)
-                rowInlineButton.add(button)
-                rowsInline.add(rowInlineButton)
-            }
-
-            val rowInlineButton = ArrayList<InlineKeyboardButton>()
-            val returnButton = InlineKeyboardButton()
-            returnButton.putData("\uD83D\uDD19  Назад в меню", callData_mainMenu)
-            rowInlineButton.add(returnButton)
-            rowsInline.add(rowInlineButton)
-
-            inlineKeyboardMarkup.keyboard = rowsInline
-            editMessageText.replyMarkup = inlineKeyboardMarkup
-        }
-
-        editMessageText.putData(stringChatId, intMessageId, textForMessage)
-       return editMessageText
-    }
-
-
+    // Сообщение о загрузке backup
     private fun receiveBackupMenuMessage(textForMessage: String, stringChatId: String, messageId: Int): EditMessageText {
         val editMessageText = EditMessageText()
         editMessageText.putData(stringChatId, messageId, textForMessage)
-        editMessageText.replyMarkup = receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", callData_mainMenu, "В backup меню", callData_backupMenu)
+        editMessageText.replyMarkup = receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", callData_mainMenu,
+                "В backup меню", callData_backupMenu)
         return editMessageText
     }
 
-
-    fun createClientAppointment(stringChatId: String, messageId: Int, updateMessageText: String, month: String, callData: String, clientRepository: Iterable<ClientData>): EditMessageText {
-        val dataText: String = updateMessageText.replace(" :", "").replace(":", " ").replace(", ", " ").replace(",", " ").replace(".", "").replace(" в", "").replace(" часов", "").replace(" на", "").trim()
+    // Запись клиента на время-дату при вводе ФИО в чат
+    fun createClientAppointment(stringChatId: String, messageId: Int, updateMessageText: String, month: String,
+                                callData: String, clientRepository: ClientDataDao): EditMessageText {
+        val dataText: String = updateMessageText.replace(" :", "").replace(":", " ").
+        replace(", ", " ").replace(",", " ").replace(".", "").
+        replace(" в", "").replace(" часов", "").replace(" на", "").trim()
         val splitText: List<String> = dataText.split(" ")
         val clientSecondName: String = splitText[0]
         val localDate = LocalDate.now()
         val formatter = DateTimeFormatter.ofPattern("yyyy")
         val longChatId = stringChatId.toLong()
 
-        val clients = clientRepository.filter { it.specialistId == longChatId && it.secondName.contains(clientSecondName, true) }
+        val clients = clientRepository.findAll().filter { it.specialistId == longChatId && it.secondName.
+        contains(clientSecondName, true) }
 
         var textForMessage = "ℹ  "
         val editMessageText = EditMessageText()
@@ -418,7 +416,7 @@ class BotMenuFunction : BotMenuInterface {
 
         if(clients.isEmpty() || day == 0 || hour == 0 || (minute == 0 && splitText[4] != stringMinute)){
             textForMessage = "$textForMessage ошибка ввода фамилии клиента"
-            editMessageText.replyMarkup = receiveOneButtonMenu("\uD83D\uDD19  Отмена", callData_backupMenu)
+            editMessageText.replyMarkup = receiveOneButtonMenu("\uD83D\uDD19  Отмена", callData_mainMenu)
         } else {
             val year = if (localDate.month.value <= month.replace(" 0", "").toInt()) {
                 formatter.format(localDate).toInt()
@@ -426,7 +424,8 @@ class BotMenuFunction : BotMenuInterface {
                 formatter.format(localDate).toInt() + 1
             }
 
-            date = if (day < 10) "$year-${month.replace(" ", "")}-0$day" else "$year-${month.replace(" ", "")}-$day"
+            date = if (day < 10) "$year-${month.replace(" ", "")}-0$day" else "$year-${month.
+            replace(" ", "")}-$day"
             textForMessage = "\uD83D\uDD30 Вы можете записать на $day ${splitText[2]} в $hour:$stringMinute пациента:"
 
             val inlineKeyboardMarkup = InlineKeyboardMarkup()
@@ -434,40 +433,8 @@ class BotMenuFunction : BotMenuInterface {
             for (elem in clients) {
                 val rowInlineButton = ArrayList<InlineKeyboardButton>()
                 val button = InlineKeyboardButton()
-                button.putData("${elem.secondName} ${elem.firstName} ${elem.patronymic}", "$callData${elem.clientId}#$date#$stringHour:$stringMinute")
-                rowInlineButton.add(button)
-                rowsInline.add(rowInlineButton)
-            }
-
-            val rowInlineButton = ArrayList<InlineKeyboardButton>()
-            val returnButton = InlineKeyboardButton()
-            returnButton.putData("\uD83D\uDD19  Отмена", callData_backupMenu)
-            rowInlineButton.add(returnButton)
-            rowsInline.add(rowInlineButton)
-            inlineKeyboardMarkup.keyboard = rowsInline
-            editMessageText.replyMarkup = inlineKeyboardMarkup
-        }
-        editMessageText.putData(stringChatId, messageId, textForMessage)
-        return editMessageText
-    }
-
-
-    fun receiveSearchClientMenu(stringChatId: String, messageId: Int, longChatId: Long, updateMessageText: String, clientData: Iterable<ClientData>): EditMessageText {
-        val clients = clientData.filter { cli -> cli.specialistId == longChatId && cli.secondName.contains(updateMessageText, true) }
-        val textForMessage: String
-        val editMessageText = EditMessageText()
-
-        if(clients.isEmpty()){
-            textForMessage = text_clientNotFound
-            editMessageText.replyMarkup = receiveOneButtonMenu("\uD83D\uDD19  Отмена", callData_backupMenu)
-        } else {
-            textForMessage = text_chooseClient
-            val inlineKeyboardMarkup = InlineKeyboardMarkup()
-            val rowsInline = ArrayList<List<InlineKeyboardButton>>()
-            for (elem in clients) {
-                val rowInlineButton = ArrayList<InlineKeyboardButton>()
-                val button = InlineKeyboardButton()
-                button.putData(elem.secondName + " " +  elem.firstName, "$callData_callBackClientId${elem.clientId}")
+                button.putData("${elem.secondName} ${elem.firstName} ${elem.patronymic}",
+                        "$callData${elem.clientId}#$date#$stringHour:$stringMinute")
                 rowInlineButton.add(button)
                 rowsInline.add(rowInlineButton)
             }
@@ -477,25 +444,62 @@ class BotMenuFunction : BotMenuInterface {
             returnButton.putData("\uD83D\uDD19  Отмена", callData_mainMenu)
             rowInlineButton.add(returnButton)
             rowsInline.add(rowInlineButton)
-
             inlineKeyboardMarkup.keyboard = rowsInline
             editMessageText.replyMarkup = inlineKeyboardMarkup
         }
-
         editMessageText.putData(stringChatId, messageId, textForMessage)
         return editMessageText
     }
 
+    // Меню со списком найденных клиентов
+    fun receiveClientBySecondName(intMessageId: Int, stringChatId: String, longChatId: Long, secondNameText: String,
+                                  calBackData: String, clientRepository: ClientDataDao): EditMessageText {
+        val client = clientRepository.findAll().filter { it.specialistId == longChatId &&
+                it.secondName.contains(secondNameText, true) }.filter { it.secondName.first().lowercase() ==
+                secondNameText.first().lowercase() }.sortedBy { it.secondName }
+        val textForMessage: String
+        val editMessageText = EditMessageText()
 
-    fun receiveAppointmentMonth(stringChatId: String, intMessageId: Int, callBackData: String, clientRepository: ClientDataDao): EditMessageText {
+        if(client.isEmpty()){
+            textForMessage = text_clientNotFound
+            editMessageText.replyMarkup = receiveOneButtonMenu("\uD83D\uDD19  Назад в меню",
+                    callData_mainMenu)
+
+        } else {
+            textForMessage = text_chooseClient
+            val inlineKeyboardMarkup = InlineKeyboardMarkup()
+            val rowsInline = ArrayList<List<InlineKeyboardButton>>()
+            for (elem in client) {
+                val rowInlineButton = ArrayList<InlineKeyboardButton>()
+                val button = InlineKeyboardButton()
+                button.putData("${elem.secondName} ${elem.firstName}", "$calBackData${elem.clientId}")
+                rowInlineButton.add(button)
+                rowsInline.add(rowInlineButton)
+            }
+
+            val rowInlineButton = ArrayList<InlineKeyboardButton>()
+            val returnButton = InlineKeyboardButton()
+            returnButton.putData("\uD83D\uDD19  Назад в меню", callData_mainMenu)
+            rowInlineButton.add(returnButton)
+            rowsInline.add(rowInlineButton)
+            inlineKeyboardMarkup.keyboard = rowsInline
+            editMessageText.replyMarkup = inlineKeyboardMarkup
+        }
+        editMessageText.putData(stringChatId, intMessageId, textForMessage)
+        return editMessageText
+    }
+
+    // Выбор даты для записи клиента
+    fun receiveAppointmentMonth(stringChatId: String, intMessageId: Int, callBackData: String,
+                                clientRepository: ClientDataDao): EditMessageText {
         val clientId = callBackData.replace(callData_callBackClientId, "")
 
         val client: ClientData = clientRepository.findById(clientId.toLong()).get()
         val editMessageText = EditMessageText()
-        val date = LocalDate.now()
-        val numFormat = DateTimeFormatter.ofPattern("MM")
-        val buttonFormat = DateTimeFormatter.ofPattern("MM.yyyy")
-        val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
+        val date: LocalDate = LocalDate.now()
+        val numFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("MM")
+        val buttonFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("MM.yyyy")
+        val formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
 
         val inlineKeyboardMarkup = InlineKeyboardMarkup()
         val rowsInline = ArrayList<List<InlineKeyboardButton>>()
@@ -506,11 +510,13 @@ class BotMenuFunction : BotMenuInterface {
         firstRowInlineButton.add(firstButton)
 
         val secondButton = InlineKeyboardButton()
-        secondButton.putData(buttonFormat.format(date.plusMonths(1)), "${numFormat.format(date.plusMonths(1))}@$clientId")
+        secondButton.putData(buttonFormat.format(date.plusMonths(1)), "${numFormat.
+        format(date.plusMonths(1))}@$clientId")
         firstRowInlineButton.add(secondButton)
 
         val thirdButton = InlineKeyboardButton()
-        thirdButton.putData(buttonFormat.format(date.plusMonths(2)), "${numFormat.format(date.plusMonths(2))}@$clientId")
+        thirdButton.putData(buttonFormat.format(date.plusMonths(2)), "${numFormat.
+        format(date.plusMonths(2))}@$clientId")
         firstRowInlineButton.add(thirdButton)
 
         val secondRowInlineButton = ArrayList<InlineKeyboardButton>()
@@ -524,18 +530,20 @@ class BotMenuFunction : BotMenuInterface {
 
         editMessageText.replyMarkup = inlineKeyboardMarkup
 
-        val textForMessage: String = if (client.appointmentDate.length == 10 && LocalDate.now().isBefore(LocalDate.parse(client.appointmentDate))) {
-            "$text_cliAppointmentOne${formatter.format(LocalDate.parse(client.appointmentDate))} в ${client.appointmentTime}$text_cliAppointmentTwo"
+        val textForMessage: String = if (client.appointmentDate.length == 10 && LocalDate.now().
+                isBefore(LocalDate.parse(client.appointmentDate))) {
+            "$text_cliAppointmentOne${formatter.format(LocalDate.parse(client.appointmentDate))} в " +
+                    "${client.appointmentTime}$text_cliAppointmentTwo"
         } else {
             text_chooseMonth
         }
-
         editMessageText.putData(stringChatId, intMessageId, textForMessage)
         return editMessageText
     }
 
-
-    fun receiveClientSettingMenu(stringChatId: String, intMessageId: Int, callBackData: String, isSubscriptionExpire: Boolean, clientRepository: ClientDataDao): EditMessageText {
+    // Меню данных клиента
+    fun receiveClientSettingMenu(stringChatId: String, intMessageId: Int, callBackData: String,
+                                 isSubscriptionExpire: Boolean, clientRepository: ClientDataDao): EditMessageText {
         val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
         val clientId = callBackData.replace(callData_clientSettingMenu, "")
         val client: ClientData = clientRepository.findById(clientId.toLong()).get()
@@ -572,13 +580,14 @@ class BotMenuFunction : BotMenuInterface {
         return editMessageText
     }
 
-
-    fun receiveAppointmentDay(longChatId: Long, stringChatId: String, intMessageId: Int, callBackData: String, comeBackInfo: HashMap<String, String>, clientRepository: ClientDataDao): EditMessageText {
-        val dataString = callBackData.split(callData_appointmentDay)
-        val appointmentMonth = dataString[0].toInt()
-        val clientId = dataString[1]
-        val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
-        val localDate = LocalDate.now()
+    // Выбор дня для записи клиента
+    fun receiveAppointmentDay(longChatId: Long, stringChatId: String, intMessageId: Int, callBackData: String,
+                              comeBackInfo: HashMap<String, String>, clientRepository: ClientDataDao): EditMessageText {
+        val dataString: List<String> = callBackData.split(callData_appointmentDay)
+        val appointmentMonth: Int = dataString[0].toInt()
+        val clientId: String = dataString[1]
+        val formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
+        val localDate: LocalDate = LocalDate.now()
         val editMessageText = EditMessageText()
         val startDay: Int
         comeBackInfo[stringChatId] = callBackData
@@ -586,9 +595,15 @@ class BotMenuFunction : BotMenuInterface {
         val stringBuilder = StringBuilder(text_appointmentDate)
         val daysAppointment = HashMap<String, Int>()
 
-        val clients = clientRepository.findAll().filter { it.specialistId == longChatId && it.appointmentDate.length == 10 && it.appointmentDate.split("-")[1] == dataString[0] && (localDate.isEqual(LocalDate.parse(it.appointmentDate)) || localDate.isBefore(LocalDate.parse(it.appointmentDate))) }.sortedBy { it.appointmentDate }
-        clients.forEach { if (daysAppointment[it.appointmentDate] == null) daysAppointment[it.appointmentDate] = 1 else daysAppointment[it.appointmentDate] = daysAppointment[it.appointmentDate]!! + 1 }
-        daysAppointment.toSortedMap().forEach { stringBuilder.append("• ${formatter.format(LocalDate.parse(it.key))}   записано клиентов:   ${it.value}\n") }
+        val clients = clientRepository.findAll().filter { it.specialistId == longChatId &&
+                it.appointmentDate.length == 10 && it.appointmentDate.split("-")[1] == dataString[0] &&
+                (localDate.isEqual(LocalDate.parse(it.appointmentDate)) || localDate.isBefore(LocalDate.parse(it.
+                appointmentDate))) }.sortedBy { it.appointmentDate }
+
+        clients.forEach { if (daysAppointment[it.appointmentDate] == null) daysAppointment[it.appointmentDate] = 1 else
+            daysAppointment[it.appointmentDate] = daysAppointment[it.appointmentDate]!! + 1 }
+        daysAppointment.toSortedMap().forEach { stringBuilder.append("• ${formatter.format(LocalDate.parse(it.key))}   " +
+                "записано клиентов:   ${it.value}\n") }
 
         val appointmentDate = if (localDate.monthValue > appointmentMonth) {
             localDate.plusYears(1).withMonth(appointmentMonth)
@@ -659,14 +674,17 @@ class BotMenuFunction : BotMenuInterface {
         return editMessageText
     }
 
-
-    fun receiveAppointmentHour(longChatId: Long, stringChatId: String, intMessageId: Int, callBackData: String, comeBackInfo: HashMap<String, String>, clientRepository: ClientDataDao): EditMessageText {
+    // Установка часа приема клиента
+    fun receiveAppointmentHour(longChatId: Long, stringChatId: String, intMessageId: Int, callBackData: String,
+                               comeBackInfo: HashMap<String, String>, clientRepository: ClientDataDao): EditMessageText {
         val dataText = callBackData.replace(callData_appointmentHour, "")
         val splitData = dataText.split("#")
         val dayOfMonth = if (splitData[0].length == 1) "0${splitData[0]}" else splitData[0]
 
         val stringBuilder = StringBuilder(text_appointmentTime)
-        clientRepository.findAll().filter { it.specialistId == longChatId && it.appointmentDate.length == 10 }.filter { it.appointmentDate.split("-")[2] == dayOfMonth }.sortedBy { it.appointmentTime }.forEach { stringBuilder.append("• ${it.appointmentTime}  -  ${it.secondName} ${it.firstName}\n") }
+        clientRepository.findAll().filter { it.specialistId == longChatId && it.appointmentDate.length == 10 }.
+        filter { it.appointmentDate.split("-")[2] == dayOfMonth }.sortedBy { it.appointmentTime }.
+        forEach { stringBuilder.append("• ${it.appointmentTime}  -  ${it.secondName} ${it.firstName}\n") }
 
         val editMessageText = EditMessageText()
 
@@ -719,8 +737,9 @@ class BotMenuFunction : BotMenuInterface {
         return editMessageText
     }
 
-
-    fun receiveAppointmentMinute(stringChatId: String, intMessageId: Int, callBackData: String, comeBackInfo: HashMap<String, String>): EditMessageText {
+    // Установка минут для записи клиента на прием
+    fun receiveAppointmentMinute(stringChatId: String, intMessageId: Int, callBackData: String,
+                                 comeBackInfo: HashMap<String, String>): EditMessageText {
         val dataText = callBackData.replace(callData_appointmentMin, "")
         val splitData = dataText.split("#")
         comeBackInfo[stringChatId] = ""
@@ -792,23 +811,27 @@ class BotMenuFunction : BotMenuInterface {
         return editMessageText
     }
 
-
-    fun changeUserData(stringChatId: String, intMessageId: Int, callBackData: String, tempData: HashMap<String, String>, userRepository: UserDao): EditMessageText {
+    // Изменить данные user
+    fun changeUserData(stringChatId: String, intMessageId: Int, callBackData: String, tempData: HashMap<String, String>,
+                       userRepository: UserDao): EditMessageText {
         val idData = callBackData.replace(callData_changeUser, "").split(" ")
         val userId = idData[0]
         val user = userRepository.findById(userId.toLong()).get()
 
-        val textForMessage = "$text_changeUserDataOne${user.secondName}\nИмя: ${user.firstName}\nОтчество: ${user.patronymic}\nПрофессия: ${user.profession}" +
-                "\n❗ Неизменяемое поле Chat id: ${user.chatId}\nПароль: ${user.password}\nВремя отправки сообщений клиенту: ${user.sendTime}\nВременная зона: ${user.timeZone}" +
-                "\nОтправка сообщений за дней до приема: ${user.sendBeforeDays}\nДата абонентского платежа: ${user.paymentDate}$text_changeUserDataTwo"
+        val textForMessage = "$text_changeUserDataOne${user.secondName}\nИмя: ${user.firstName}\nОтчество: " +
+                "${user.patronymic}\nПрофессия: ${user.profession}\n❗ Неизменяемое поле Chat id: ${user.chatId}\nПароль: " +
+                "${user.password}\nВремя отправки сообщений клиенту: ${user.sendTime}\nВременная зона: ${user.timeZone}" +
+                "\nОтправка сообщений за дней до приема: ${user.sendBeforeDays}\nДата абонентского платежа: " +
+                "${user.paymentDate}$text_changeUserDataTwo"
 
         val editMessageText = EditMessageText().putData(stringChatId, intMessageId, textForMessage)
-        editMessageText.replyMarkup = receiveTwoButtonsMenu("❗ Удалить пользователя", "$callData_delAllUserData$userId", "В главное меню  \uD83D\uDD19", callData_mainMenu)
-        tempData[stringChatId] = inputChangeUser
+        editMessageText.replyMarkup = receiveTwoButtonsMenu("❗ Удалить пользователя",
+                "$callData_delAllUserData$userId", "В главное меню  \uD83D\uDD19", callData_mainMenu)
+        tempData[stringChatId] = input_changeUser
         return editMessageText
     }
 
-
+    // Сохранение истории посещения клиентов
     fun saveHistoryOfAppointment(clientRepository: ClientDataDao) {
         val localDate = LocalDate.now()
         val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
@@ -817,17 +840,18 @@ class BotMenuFunction : BotMenuInterface {
                 .minusDays(1))} в ${it.appointmentTime}"; clientRepository.save(it) }
     }
 
-
+    // Отмена визита клиента
     fun removeClientsAppointment(clientRepository: ClientDataDao) {
         val localDate = LocalDate.now()
         clientRepository.findAll().filter { localDate.minusDays(1).toString() == it.appointmentDate &&
-            it.visitAgreement != wqSym && it.visitAgreement != qSym}.forEach {
+                it.visitAgreement != wqSym && it.visitAgreement != qSym}.forEach {
             it.appointmentDate = ""; it.appointmentTime = ""; it.visitAgreement = wqSym; clientRepository.save(it) }
     }
 
-
-    fun changeUserData(updateMessageText: String, stringChatId: String, tempData: HashMap<String, String>, intMessageId: Int, userRepository: UserDao): EditMessageText {
-        tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
+    // Изменить данные пользователя (для администратора)
+    fun changeUserData(updateMessageText: String, stringChatId: String, tempData: HashMap<String, String>, intMessageId: Int,
+                       userRepository: UserDao): EditMessageText {
+        tempData[stringChatId] = plugText
         val changeData = updateMessageText.split("#")
         val editMessageText = EditMessageText()
 
@@ -858,13 +882,14 @@ class BotMenuFunction : BotMenuInterface {
             editMessageText.putData(stringChatId, intMessageId, textForMessage)
             editMessageText.replyMarkup = receiveOneButtonMenu("\uD83D\uDD19  В главное меню", callData_mainMenu)
         }
-        return editMessageText // фамилия#имя#отчество#профессия#10#555#12#0#1#2050-04-20
+        return editMessageText
     }
 
-
-    fun putClientBackupToServer(stringChatId: String, intMessageId: Int, directory: String, tempData: HashMap<String, String>, clientRepository: ClientDataDao): EditMessageText {
-        tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
-        val backupDirectory: String = directory + config.clientBackupTitle
+    // Установка client backup в сервер
+    fun putClientBackupToServer(stringChatId: String, intMessageId: Int, directory: String, tempData: HashMap<String,
+            String>, clientRepository: ClientDataDao): EditMessageText {
+        tempData[stringChatId] = plugText
+        val backupDirectory: String = directory + config_clientBackupTitle
         val serverBackup = ServerBackup()
 
         serverBackup.startBackup(backupDirectory)
@@ -877,10 +902,11 @@ class BotMenuFunction : BotMenuInterface {
         return receiveBackupMenuMessage(textForMessage, stringChatId, intMessageId)
     }
 
-
-    fun putUserBackupToServer(stringChatId: String, intMessageId: Int, longChatId: Long, directory: String, tempData: HashMap<String, String>, userRepository: UserDao): EditMessageText {
-        tempData[stringChatId] = "TEMP_DATA_TO_AVOID_FIND_CLIENT_BLOCK"
-        val backupDirectory: String = directory + config.userBackupTitle
+    // Установка user backup в сервер
+    fun putUserBackupToServer(stringChatId: String, intMessageId: Int, longChatId: Long, directory: String,
+                              tempData: HashMap<String, String>, userRepository: UserDao): EditMessageText {
+        tempData[stringChatId] = plugText
+        val backupDirectory: String = directory + config_userBackupTitle
         val serverBackup = ServerBackup()
 
         serverBackup.startBackup(backupDirectory)
@@ -892,8 +918,9 @@ class BotMenuFunction : BotMenuInterface {
         return receiveBackupMenuMessage(textForMessage, stringChatId, intMessageId)
     }
 
-
-    fun createBackupInDirectory(stringChatId: String, intMessageId: Int, savedGroupTitle: String, directory: String, backupTitle: String, savedGroupList: List<String>): EditMessageText {
+    // Создание backup в заданной директории
+    fun createBackupInDirectory(stringChatId: String, intMessageId: Int, savedGroupTitle: String, directory: String,
+                                backupTitle: String, savedGroupList: List<String>): EditMessageText {
         val backupDirectory = directory + backupTitle
         val backupCreator = BackupCreator()
         val backupFile = backupCreator.receiveBackupFile(savedGroupTitle, savedGroupList)
@@ -903,12 +930,13 @@ class BotMenuFunction : BotMenuInterface {
         val editMessageText = EditMessageText()
         editMessageText.putData(stringChatId, intMessageId, textForMessage)
         editMessageText.replyMarkup = receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню",
-        callData_mainMenu, "В backup меню", callData_backupMenu)
-        return  editMessageText
+                callData_mainMenu, "В backup меню", callData_backupMenu)
+        return editMessageText
     }
 
-
-    fun repairUserAccount(stringChatId: String, intMessageId: Int, longChatId: Long, updateMessageText: String, userRepository: UserDao, clientRepository: ClientDataDao): EditMessageText {
+    // Восстановление учетной записи специалиста
+    fun repairUserAccount(stringChatId: String, intMessageId: Int, longChatId: Long, updateMessageText: String,
+                          userRepository: UserDao, clientRepository: ClientDataDao): EditMessageText {
         val oldUser: User
         val user = userRepository.findById(longChatId).get()
         val users = userRepository.findAll().filter { it.chatId != user.chatId && it.password == updateMessageText &&
@@ -932,8 +960,9 @@ class BotMenuFunction : BotMenuInterface {
         return editMessageText
     }
 
-
-    fun setUserPassword(stringChatId: String, intMessageId: Int, longChatId: Long, updateMessageText: String, userRepository: UserDao): EditMessageText {
+    // Добавление пароля для учетной записи
+    fun setUserPassword(stringChatId: String, intMessageId: Int, longChatId: Long, updateMessageText: String,
+                        userRepository: UserDao): EditMessageText {
         val editMessageText = EditMessageText()
 
         if (updateMessageText.length in 5..15) {
@@ -948,13 +977,14 @@ class BotMenuFunction : BotMenuInterface {
         return editMessageText
     }
 
-
-    fun inputOldUserPassword(stringChatId: String, intMessageId: Int, longChatId: Long, tempData: HashMap<String, String>, updateMessageText: String, userRepository: UserDao): EditMessageText {
+    // Ввод старого пароля для подтверждения нового
+    fun inputOldUserPassword(stringChatId: String, intMessageId: Int, longChatId: Long, tempData: HashMap<String, String>,
+                             updateMessageText: String, userRepository: UserDao): EditMessageText {
         val user = userRepository.findById(longChatId).get()
         val editMessageText = EditMessageText()
 
         if (updateMessageText == user.password) {
-            tempData[stringChatId] = inputPassword
+            tempData[stringChatId] = input_password
             editMessageText.putData(stringChatId, intMessageId, text_passwordAccepted)
         } else {
             editMessageText.putData(stringChatId, intMessageId, text_err)
@@ -963,8 +993,9 @@ class BotMenuFunction : BotMenuInterface {
         return editMessageText
     }
 
-
-    fun addClientRemark(stringChatId: String, intMessageId: Int, savedId: HashMap<String, Long>, updateMessageText: String, clientRepository: ClientDataDao): EditMessageText {
+    // Добавление заметки клиенту
+    fun addClientRemark(stringChatId: String, intMessageId: Int, savedId: HashMap<String, Long>, updateMessageText: String,
+                        clientRepository: ClientDataDao): EditMessageText {
         val client = clientRepository.findById(savedId[stringChatId]!!).get()
         val editMessageText = EditMessageText()
 
@@ -984,26 +1015,28 @@ class BotMenuFunction : BotMenuInterface {
         } else {
             editMessageText.putData(stringChatId, intMessageId, "$text_remarkAddOne${client.remark}$text_remarkAddThree")
         }
-        editMessageText.replyMarkup = receiveOneButtonMenu("\uD83D\uDD19  В главное меню",
-                callData_mainMenu)
+        editMessageText.replyMarkup = receiveOneButtonMenu("\uD83D\uDD19  В главное меню", callData_mainMenu)
         return editMessageText
     }
 
-
-    fun createDefaultBackup(stringChatId: String, intMessageId: Int, backupTitle: String, elementList: List<String>): EditMessageText {
-        val backupDirectory: String = config.defaultDirectory + backupTitle
+    // Создание backup в директории по умолчанию
+    fun createDefaultBackup(stringChatId: String, intMessageId: Int, backupTitle: String,
+                            elementList: List<String>): EditMessageText {
+        val backupDirectory: String = config_backupDirectory + backupTitle
         val backupCreator = BackupCreator()
         val backupFile = backupCreator.receiveBackupFile(backupTitle, elementList)
         backupCreator.createBackupXml(backupFile, backupDirectory)
         val textForMessage = "$text_createBackupOne$backupTitle$text_createBackupTwo$backupDirectory"
 
         val editMessageText = EditMessageText().putData(stringChatId, intMessageId, textForMessage)
-        editMessageText.replyMarkup = receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", callData_mainMenu, "В backup меню", callData_backupMenu)
+        editMessageText.replyMarkup = receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", callData_mainMenu,
+                "В backup меню", callData_backupMenu)
         return editMessageText
     }
 
-
-    fun lookClientAppointment(longChatId: Long, stringChatId: String, intMessageId: Int, clientRepository: ClientDataDao, userRepository: UserDao): EditMessageText {
+    // Просмотр записи к специалисту
+    fun lookClientAppointment(longChatId: Long, stringChatId: String, intMessageId: Int, clientRepository: ClientDataDao,
+                              userRepository: UserDao): EditMessageText {
         val firstText = text_yourAppointment
         val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
         val localDate = LocalDate.now()
@@ -1023,8 +1056,9 @@ class BotMenuFunction : BotMenuInterface {
         return editMessageText
     }
 
-
-    fun generateCode(stringChatId: String, callBackData: String, intMessageId: Int, savedId: HashMap<String, Long>, registerPassword: HashMap<String, Int>, clientIdExistCheck: HashMap<String, String>): EditMessageText {
+    // Генерация кода для регистрации нового клиента
+    fun generateCode(stringChatId: String, callBackData: String, intMessageId: Int, savedId: HashMap<String, Long>,
+                     registerPassword: HashMap<String, Int>, clientIdExistCheck: HashMap<String, String>): EditMessageText {
         val clientId = callBackData.replace(callData_generateCode, "")
         var password: Int
         savedId[stringChatId] = 0
@@ -1051,8 +1085,9 @@ class BotMenuFunction : BotMenuInterface {
         return editMessageText
     }
 
-
-    fun receiveClientsMenu(longChatId: Long, stringChatId: String, intMessageId: Int, clientRepository: ClientDataDao, userRepository: UserDao): EditMessageText {
+    // Меню с информацией о клиентах
+    fun receiveClientsMenu(longChatId: Long, stringChatId: String, intMessageId: Int, clientRepository: ClientDataDao,
+                           userRepository: UserDao): EditMessageText {
         val localDate = LocalDate.now()
         val clients = clientRepository.findAll().filter { it.specialistId == longChatId }
         val amount = clients.size
@@ -1061,28 +1096,29 @@ class BotMenuFunction : BotMenuInterface {
         var textForMessage = "$text_clientLimitFour$amount\n\n"
 
         textForMessage += if (localDate.isAfter(LocalDate.parse(user.paymentDate))){
-            if ((config.freeClientsAmount - amount) > 0){
-                "$text_clientLimitFive${config.freeClientsAmount}$text_clientLimitSix${config.freeClientsAmount - amount}" +
-                "$text_clientLimitOne${config.maxClientsAmount}$text_clientLimitTwo${config.maxClientsAmount}$text_clientLimitThree"
+            if ((config_freeClientsAmount - amount) > 0){
+                "$text_clientLimitFive${config_freeClientsAmount}$text_clientLimitSix${config_freeClientsAmount - amount}" +
+                "$text_clientLimitOne${config_maxClientsAmount}$text_clientLimitTwo${config_maxClientsAmount}$text_clientLimitThree"
             } else {
-                "$text_clientLimitFive${config.freeClientsAmount}$text_clientLimitEight$text_clientLimitOne" +
-                "${config.maxClientsAmount}$text_clientLimitTwo${config.maxClientsAmount}$text_clientLimitThree"
+                "$text_clientLimitFive${config_freeClientsAmount}$text_clientLimitEight$text_clientLimitOne" +
+                "${config_maxClientsAmount}$text_clientLimitTwo${config_maxClientsAmount}$text_clientLimitThree"
             }
         } else {
-            if ((config.maxClientsAmount - amount) > 0) {
-                "$text_clientLimitFive${config.maxClientsAmount}$text_clientLimitSix${config.maxClientsAmount - amount}"
+            if ((config_maxClientsAmount - amount) > 0) {
+                "$text_clientLimitFive${config_maxClientsAmount}$text_clientLimitSix${config_maxClientsAmount - amount}"
             } else {
-                "$text_clientLimitFive${config.maxClientsAmount}$text_clientLimitSeven"
+                "$text_clientLimitFive${config_maxClientsAmount}$text_clientLimitSeven"
             }
         }
 
         val editMessageText = EditMessageText()
         editMessageText.putData(stringChatId, intMessageId, textForMessage)
-        editMessageText.replyMarkup = receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", callData_mainMenu, "Назад  ⚙", callData_myAccount)
+        editMessageText.replyMarkup = receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", callData_mainMenu,
+                "Назад  ⚙", callData_myAccount)
         return editMessageText
     }
 
-
+    // Меню с записью клиентов к специалисту
     fun receiveSchedule(longChatId: Long, stringChatId: String, intMessageId: Int, clientRepository: ClientDataDao): EditMessageText {
         val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
         var dateText = ""
@@ -1102,10 +1138,13 @@ class BotMenuFunction : BotMenuInterface {
         return editMessageText
     }
 
-    fun receiveAllClients(longChatId: Long, stringChatId: String, callBackData: String, intMessageId: Int, clientRepository: ClientDataDao): EditMessageText {
+    // Список всех клиентов специалиста
+    fun receiveAllClients(longChatId: Long, stringChatId: String, callBackData: String, intMessageId: Int,
+                          clientRepository: ClientDataDao): EditMessageText {
         val returnBackData = callBackData.replace(callData_allClients, "")
         val clientsList = mutableListOf<String>()
         val clients = clientRepository.findAll().filter { it.specialistId == longChatId }.sortedBy { it.secondName }
+
         clients.distinctBy { it.secondName }.forEach { clientsList.add(it.secondName) }
 
         clientsList.add(callData_mainMenu)
@@ -1115,8 +1154,9 @@ class BotMenuFunction : BotMenuInterface {
         return editMessageText
     }
 
-
-    fun receiveClientRemark(stringChatId: String, callBackData: String, intMessageId: Int, tempData: HashMap<String, String>, savedId: HashMap<String, Long>, clientRepository: ClientDataDao): EditMessageText {
+    // Посмотреть заметку клиента
+    fun receiveClientRemark(stringChatId: String, callBackData: String, intMessageId: Int, tempData: HashMap<String, String>,
+                            savedId: HashMap<String, Long>, clientRepository: ClientDataDao): EditMessageText {
         val clientId = callBackData.replace(callData_clientRemark, "").toLong()
         val client: ClientData = clientRepository.findById(clientId).get()
         val editMessageText = EditMessageText()
@@ -1127,17 +1167,19 @@ class BotMenuFunction : BotMenuInterface {
         if (client.remark.isEmpty()){
             editMessageText.replyMarkup = receiveOneButtonMenu("\uD83D\uDD19  В главное меню", callData_mainMenu)
         } else {
-            editMessageText.replyMarkup = receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", callData_mainMenu, "Удалить записи", "$callData_delClientRemark$clientId")
+            editMessageText.replyMarkup = receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню", callData_mainMenu,
+                    "Удалить записи", "$callData_delClientRemark$clientId")
         }
         savedId[stringChatId] = clientId
-        tempData[stringChatId] = inputRemark
+        tempData[stringChatId] = input_remark
         return editMessageText
     }
 
-
-    fun putSendMessageTime(longChatId: Long, stringChatId: String, intMessageId: Int, putTime: Int, userRepository: UserDao): EditMessageText {
-        val user = userRepository.findById(longChatId).get()
-        val sendMessageTime = user.sendTime
+    // Функция устанавливает время рассылки сообщения с уведомлением о предстоящем приёме для клиента
+    fun putSendMessageTime(longChatId: Long, stringChatId: String, intMessageId: Int, putTime: Int,
+                           userRepository: UserDao): EditMessageText {
+        val user: User = userRepository.findById(longChatId).get()
+        val sendMessageTime: Int = user.sendTime
 
         when {
             putTime == -1 && sendMessageTime > 6 -> user.sendTime = sendMessageTime - 1
@@ -1147,8 +1189,9 @@ class BotMenuFunction : BotMenuInterface {
         return receiveUserSettingsMenu(stringChatId, intMessageId, user)
     }
 
-
-    fun putSendMessageDay(longChatId: Long, stringChatId: String, intMessageId: Int, putDay: Int, userRepository: UserDao): EditMessageText {
+    // Функция устанавливает количество дней до момента отправки сообщения, с уведомлением клиента о приеме у специалиста
+    fun putSendMessageDay(longChatId: Long, stringChatId: String, intMessageId: Int, putDay: Int,
+                          userRepository: UserDao): EditMessageText {
         val user = userRepository.findById(longChatId).get()
         val sendMessageDay = user.sendBeforeDays
 
@@ -1161,8 +1204,9 @@ class BotMenuFunction : BotMenuInterface {
         return receiveUserSettingsMenu(stringChatId, intMessageId, user)
     }
 
-
-    fun putTimeZone(longChatId: Long, stringChatId: String, intMessageId: Int, putTimeZone: Int, userRepository: UserDao): EditMessageText {
+    // Функция устанавливает часовой пояс специалиста отличный от Мск.
+    fun putTimeZone(longChatId: Long, stringChatId: String, intMessageId: Int, putTimeZone: Int,
+                    userRepository: UserDao): EditMessageText {
         val user = userRepository.findById(longChatId).get()
         val timeZoneHour = user.timeZone
 
@@ -1175,26 +1219,30 @@ class BotMenuFunction : BotMenuInterface {
         return receiveUserSettingsMenu(stringChatId, intMessageId, user)
     }
 
-
-    fun receiveAppointmentForClient(longChatId: Long, stringChatId: String, intMessageId: Int, userRepository: UserDao, clientRepository: ClientDataDao): EditMessageText {
-        val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
+    // Просмотр клиентом своей записи к специалистам
+    fun receiveAppointmentForClient(longChatId: Long, stringChatId: String, intMessageId: Int, userRepository: UserDao,
+                                    clientRepository: ClientDataDao): EditMessageText {
+        val formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
         val editMessageText = EditMessageText()
-        val clients = clientRepository.findAll().filter { it.chatId == longChatId && it.appointmentDate.length == 10 }.sortedBy { it.appointmentTime }.sortedBy { it.appointmentDate } // TODO it.appointmentTime .sortedBy  it.appointmentDate
+        val clients: List<ClientData> = clientRepository.findAll().filter { it.chatId == longChatId &&
+                it.appointmentDate.length == 10 }.sortedBy { it.appointmentTime }.sortedBy { it.appointmentDate }
 
         if (clients.isEmpty()) {
             editMessageText.putData(stringChatId, intMessageId, text_notAppointment)
         } else {
             val textForMessage = StringBuilder()
             textForMessage.append(text_appointmentOne)
-            clients.forEach { textForMessage.append("\n\uD83D\uDD39 ${formatter.format(LocalDate.parse(it.appointmentDate))} в ${it.appointmentTime}$text_appointmentTwo${userRepository.findById(it.specialistId).get().getFullName()}") }
+            clients.forEach { textForMessage.append("\n\uD83D\uDD39 ${formatter.format(LocalDate.parse(it.appointmentDate))} " +
+               "в ${it.appointmentTime}$text_appointmentTwo${userRepository.findById(it.specialistId).get().getFullName()}") }
             editMessageText.putData(stringChatId, intMessageId, textForMessage.toString())
         }
         editMessageText.replyMarkup = receiveOneButtonMenu("\uD83D\uDD19  В главное меню", callData_mainMenu)
         return editMessageText
     }
 
-
-    fun deleteClientRemark(stringChatId: String, callBackData: String, intMessageId: Int, clientRepository: ClientDataDao): EditMessageText {
+    // Удалить заметку у клиента
+    fun deleteClientRemark(stringChatId: String, callBackData: String, intMessageId: Int,
+                           clientRepository: ClientDataDao): EditMessageText {
         val clientId = callBackData.replace(callData_delClientRemark, "").toLong()
         val client = clientRepository.findById(clientId).get()
         client.remark = ""
@@ -1206,23 +1254,24 @@ class BotMenuFunction : BotMenuInterface {
         return editMessageText
     }
 
-
-    fun receiveUserPasswordMenu(longChatId: Long, stringChatId: String, intMessageId: Int, tempData: HashMap<String, String>, userRepository: UserDao): EditMessageText {
+    // Меню установки пароля для учетной записи специалиста
+    fun receiveUserPasswordMenu(longChatId: Long, stringChatId: String, intMessageId: Int, tempData: HashMap<String,
+            String>, userRepository: UserDao): EditMessageText {
         val user = userRepository.findById(longChatId).get()
         val editMessageText = EditMessageText()
 
         if (user.password.isEmpty()){
             editMessageText.putData(stringChatId, intMessageId, text_addPassword)
-            tempData[stringChatId] = inputPassword
+            tempData[stringChatId] = input_password
         } else {
             editMessageText.putData(stringChatId, intMessageId, text_hasPassword)
-            tempData[stringChatId] = inputOldPassword
+            tempData[stringChatId] = input_oldPassword
         }
         editMessageText.replyMarkup = receiveOneButtonMenu("\uD83D\uDD19  Отмена", callData_mainMenu)
         return editMessageText
     }
 
-
+    // Меню добавления клиента
     fun addNewClient(stringChatId: String, intMessageId: Int, isSubscriptionExpire: Boolean): EditMessageText {
         val editMessageText: EditMessageText
         if (isSubscriptionExpire) {
@@ -1236,26 +1285,27 @@ class BotMenuFunction : BotMenuInterface {
         return editMessageText
     }
 
-
+    // Ссылка для оплаты абонемента
     fun receiveInvoiceLink(stringChatId: String, textForDescription: String): CreateInvoiceLink {
-    val labeledPriceList: List<LabeledPrice> = listOf(LabeledPrice("Оплата абонемента", config.subscriptionPrice * 100))
+    val jsonBill: String = getBillForProvider()
+    val labeledPriceList: List<LabeledPrice> = listOf(LabeledPrice("Оплата абонемента", config_subscriptionPrice * 100))
         return CreateInvoiceLink("Абонентская плата", // @NonNull String title
             textForDescription, // @NonNull String description
             stringChatId, // @NonNull String payload - определенная полезная нагрузка счета-фактуры, 1-128 байт. Информация не видна пользователю, используйте для своих внутренних процессов
-            config.payToken, // @NonNull String providerToken - токен банка/провайдера платежей - "381764678:TEST:62053", // @NonNull String providerToken - Юкасса токен (Юкасса подключает физлиц)
+                config_payToken, // @NonNull String providerToken - токен банка/провайдера платежей - "381764678:TEST:62053", // @NonNull String providerToken
             "RUB", // @NonNull String currency (валюта)
             labeledPriceList, // @NonNull List<LabeledPrice> prices
-            "https://disk.yandex.ru/i/AbFv3vCPhpVypA", // String photoUrl - фотография в меню покупки
+            "https://i.postimg.cc/dQRk4Vmd/pmpaylogo.png", // String photoUrl - фотография в меню покупки
             null, null, null, //  Integer photoSize, Integer photoWidth, Integer photoHeight
 
             // Boolean needName, Boolean needPhoneNumber, Boolean needEmail, Boolean needShippingAddress, Boolean isFlexible, Boolean sendPhoneNumberToProvider, Boolean sendEmailToProvider
             false, false, false, false /* needShippingAddress */, false /* isFlexible - цена зависит от доставки */, false/* sendPhoneNumberToProvider */, false,
-            config.bill, // String providerData - JSON-сериализованные данные о счете-фактуре, которые будут переданы поставщику платежей. Подробное описание обязательных полей должно быть предоставлено поставщиком платежных услуг //TODO
+                jsonBill, // String providerData - JSON-сериализованные данные о счете-фактуре, которые будут переданы поставщику платежей. Подробное описание обязательных полей должно быть предоставлено поставщиком платежных услуг "{\"Текст\": \"Текст\",\"Число\": 12345}"
             0, // Integer maxTipAmount - максимальный размер чаевых
             null)
     }
 
-
+    // Меню оплаты абонемента
     fun receivePayMenu(stringChatId: String, intMessageId: Int, payLync: String, textForMessage: String): EditMessageText {
         val editMessageText = EditMessageText()
         editMessageText.putData(stringChatId, intMessageId, textForMessage)
@@ -1278,28 +1328,56 @@ class BotMenuFunction : BotMenuInterface {
         return editMessageText
     }
 
-
+    // Получение списка клиентов для backup-листа
     fun receiveClientList(userId: Long, clientRepository: ClientDataDao): String {
         val stringBuilder = StringBuilder()
         clientRepository.findAll().filter { it.specialistId == userId }.sortedBy { it.appointmentDate }.
-        forEach { stringBuilder.append("${it.getFullName()}, запись: ${it.appointmentDate} - ${it.appointmentTime}; заметки клиента: ${it.remark}.\n") }
+        forEach { stringBuilder.append("${it.getFullName()}, запись: ${it.appointmentDate} - ${it.appointmentTime}; " +
+                "заметки клиента: ${it.remark}.\n") }
         return stringBuilder.toString()
     }
 
-
+    // Отправка txt.-файла со списком клиентов и данных пользователю
     fun receiveBackupList(stringChatId: String, fileDirectory: String): SendDocument {
         val sendDocument = SendDocument()
         sendDocument.document = InputFile(File(fileDirectory))
         sendDocument.caption = text_backupText
-        sendDocument.replyMarkup = receiveOneButtonMenu("\uD835\uDC0E\uD835\uDC0A", callData_delMessage)
+        sendDocument.replyMarkup = receiveOneButtonMenu(okButton, callData_delMessage)
         sendDocument.disableNotification = true
         sendDocument.chatId = stringChatId
         return sendDocument
     }
 
+    // Данные о счете-фактуре, которые будут переданы поставщику платежей
+    private fun getBillForProvider(): String {
+        val uuidString: UUID = UUID.randomUUID()
+        return "{" +
+                "\"amount\": {" +
+                "\"Оплата абонемента\": \"$config_subscriptionPrice.00\"," +
+                "\"currency\": \"RUB\"" +
+                "}," +
+                "\"payment_id\": \"$uuidString\"" +
+                "}"
+    }
 
-
-
-
+    // Если в тексте присутствует название месяца, функция вернет календарный номер месяца
+    fun receiveMonthNumber(updateMessageText: String): String {
+        return when {
+            updateMessageText.contains("январ", true) -> " 01"
+            updateMessageText.contains("феврал", true) -> " 02"
+            updateMessageText.contains("март", true) -> " 03"
+            updateMessageText.contains("апрел", true) -> " 04"
+            updateMessageText.contains("мая", true) -> " 05"
+            updateMessageText.contains("май", true) -> " 05"
+            updateMessageText.contains("июн", true) -> " 06"
+            updateMessageText.contains("июл", true) -> " 07"
+            updateMessageText.contains("август", true) -> " 08"
+            updateMessageText.contains("сентябр", true) -> " 09"
+            updateMessageText.contains("октябр", true) -> "10"
+            updateMessageText.contains("ноябр", true) -> "11"
+            updateMessageText.contains("декабр", true) -> "12"
+            else -> monthNotFoundText
+        }
+    }
 
 }

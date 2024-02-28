@@ -2,6 +2,8 @@ package aldmitry.dev.personalmanager.model
 
 import jakarta.persistence.*
 
+// ClientData - абстрактная сущность. Создается user-специалистом, не привязана к конкретному пользователю и связана
+// с пользователем только свойством chat_id.
 @Entity(name = "client_data")
 open class ClientData {
 

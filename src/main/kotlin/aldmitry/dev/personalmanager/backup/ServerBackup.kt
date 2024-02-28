@@ -7,20 +7,21 @@ import org.xml.sax.helpers.DefaultHandler
 import java.io.File
 import javax.xml.parsers.SAXParserFactory
 
+// Списки client/user для генерации объектов из xml-файла
 private val clientsDataList = mutableListOf<ClientData>()
 private val usersList = mutableListOf<User>()
 
 class ServerBackup : DefaultHandler() {
 
-
+    // Получение xml-файла
     fun startBackup(directory: String) {
-        val factory = SAXParserFactory.newInstance()
+        val factory: SAXParserFactory = SAXParserFactory.newInstance()
         val parser = factory.newSAXParser()
         val serverBackup = ServerBackup()
         parser.parse(File(directory), serverBackup)
     }
 
-
+    // Генерация объектов из xml-файла
     override fun startElement(uri: String, localName: String, qName: String, attributes: Attributes) {
         when (qName){
             "client" -> {
@@ -56,20 +57,18 @@ class ServerBackup : DefaultHandler() {
         }
     }
 
-
+    // Получение списка объектов client
     fun receiveClientsBackup(clients: MutableList<ClientData>) : MutableList<ClientData> {
         clients.addAll(clientsDataList)
         clientsDataList.clear()
         return clients
     }
 
-
+    // Получение списка объектов users
     fun receiveUsersBackup(users: MutableList<User>) : MutableList<User> {
         users.addAll(usersList)
         usersList.clear()
         return users
     }
-
-
 
 }
