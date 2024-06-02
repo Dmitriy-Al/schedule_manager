@@ -47,8 +47,8 @@ open class User {
 
     override fun toString(): String {
         return "<user chatId=\"$chatId\" secondName=\"$secondName\" firstName=\"$firstName\" patronymic=\"$patronymic\" " +
-                "password=\"$password\" profession=\"$profession\" sendTime=\"$sendTime\" " +
-                "timeZone=\"$timeZone\" paymentDate=\"$paymentDate\" sendBeforeDays=\"$sendBeforeDays\" />"
+                "password=\"$password\" profession=\"$profession\" sendTime=\"$sendTime\" timeZone=\"$timeZone\" " +
+                "paymentDate=\"$paymentDate\" sendBeforeDays=\"$sendBeforeDays\" />"
     }
 
 

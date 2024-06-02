@@ -37,6 +37,7 @@ class ServerBackup : DefaultHandler() {
                 clientData.appointmentTime = attributes.getValue("appointmentTime")
                 clientData.remark = attributes.getValue("remark")
                 clientData.visitHistory = attributes.getValue("visitHistory")
+                clientData.visitDuration = attributes.getValue("visitDuration")
                 clientsDataList.add(clientData)
             }
 

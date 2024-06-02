@@ -2,6 +2,9 @@ package aldmitry.dev.personalmanager.backup
 
 import java.io.FileOutputStream
 
+/**
+ * Создание backup-файлов
+ */
 class BackupCreator {
 
     // Конфигурация backup-файла xml.

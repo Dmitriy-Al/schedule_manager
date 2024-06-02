@@ -42,6 +42,9 @@ open class ClientData {
     @Column(name = "visit_history", columnDefinition = "text")
     open var visitHistory: String = ""
 
+    @Column(name = "visit_duration", columnDefinition = "text")
+    open var visitDuration: String = "..."
+
 
     fun getFullName(): String {
         return "$secondName $firstName $patronymic"
@@ -51,7 +54,8 @@ open class ClientData {
     override fun toString(): String {
         return "<client secondName=\"$secondName\" firstName=\"$firstName\" patronymic=\"$patronymic\" specialistId=" +
                 "\"$specialistId\" clientId=\"$clientId\" chatId=\"$chatId\" visitAgreement=\"$visitAgreement\" appointmentDate=" +
-                "\"$appointmentDate\" appointmentTime=\"$appointmentTime\" remark=\"$remark\" visitHistory=\"$visitHistory\" />"
+                "\"$appointmentDate\" appointmentTime=\"$appointmentTime\" remark=\"$remark\" visitHistory=\"$visitHistory\"" +
+                " visitDuration=\"$visitDuration\"/>"
     }
 
 

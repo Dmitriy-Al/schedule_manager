@@ -157,6 +157,30 @@ class BotMenuFunction : BotMenuInterface {
         return editMessageText
     }
 
+    // Меню оплаты абонемента с помощью перевода
+    fun receivePaymentMenu(stringChatId: String, intMessageId: Int, paymentPassword: String): EditMessageText {
+        val textForMessage: String = "$text_subscriptionOne$config_subscriptionPrice ₽ за каждые $config_subscriptionDays" +
+                "$text_subscriptionTwo${(config_subscriptionDays * 3)} дней будет стоить ${(config_subscriptionPrice * 3)}" +
+                "$text_subscriptionThree$config_payCard$text_subscriptionFour $paymentPassword"
+
+        val editMessageText = EditMessageText()
+        editMessageText.putData(stringChatId, intMessageId, textForMessage)
+        editMessageText.replyMarkup = receiveOneButtonMenu("\uD83D\uDD19  В главное меню", callData_mainMenu)
+        return editMessageText
+    }
+
+    // Продление подписки для user
+    fun upSubscription(stringChatId: String, intMessageId: Int, subscriptionMonth: String, userId: String, userRepository: UserDao): EditMessageText {
+        val subscriptionDays = (subscriptionMonth.toLong()) * config_subscriptionDays
+        val user = userRepository.findById(userId.toLong()).get()
+        val date = LocalDate.parse(user.paymentDate)
+        val newDate = date.plusDays(subscriptionDays)
+        user.paymentDate = newDate.toString()
+        userRepository.save(user)
+        return EditMessageText().putData(stringChatId, intMessageId,
+            "$text_paymentThree${user.chatId}$text_paymentFour$date$text_paymentFive${user.paymentDate}")
+    }
+
     // Текст начального экрана для специалиста-user
     private fun receiveTextForStartMessage(longChatId: Long, textForStartMessage: String,
                                            clientRepository: ClientDataDao): String {
@@ -434,7 +458,7 @@ class BotMenuFunction : BotMenuInterface {
                 val rowInlineButton = ArrayList<InlineKeyboardButton>()
                 val button = InlineKeyboardButton()
                 button.putData("${elem.secondName} ${elem.firstName} ${elem.patronymic}",
-                        "$callData${elem.clientId}#$date#$stringHour:$stringMinute")
+                        "$callData${elem.clientId}#$date#$stringHour:$stringMinute#...")
                 rowInlineButton.add(button)
                 rowsInline.add(rowInlineButton)
             }
@@ -554,7 +578,8 @@ class BotMenuFunction : BotMenuInterface {
             "нет"
         } else {
             menuList.add(callData_removeAppointment)
-            "${formatter.format(LocalDate.parse(client.appointmentDate))}  в  ${client.appointmentTime}"
+            "${formatter.format(LocalDate.parse(client.appointmentDate))}  в  ${client.appointmentTime} " +
+                    "$text_visitDuration ${client.visitDuration} минут."
         }
 
         menuList.add(callData_deleteClientMenu)
@@ -684,7 +709,8 @@ class BotMenuFunction : BotMenuInterface {
         val stringBuilder = StringBuilder(text_appointmentTime)
         clientRepository.findAll().filter { it.specialistId == longChatId && it.appointmentDate.length == 10 }.
         filter { it.appointmentDate.split("-")[2] == dayOfMonth }.sortedBy { it.appointmentTime }.
-        forEach { stringBuilder.append("• ${it.appointmentTime}  -  ${it.secondName} ${it.firstName}\n") }
+        forEach { stringBuilder.append("• ${it.appointmentTime}  -  ${it.secondName} ${it.firstName}$text_visitDuration" +
+                " ${it.visitDuration} мин.\n") }
 
         val editMessageText = EditMessageText()
 
@@ -772,25 +798,25 @@ class BotMenuFunction : BotMenuInterface {
             when {
                 i == 5 -> {
                     val button = InlineKeyboardButton()
-                    button.putData("05", "$callData_clientData$clientId#$date#$hour:05")
+                    button.putData("05", "$callData_duration$clientId#$date#$hour:05")
                     firstRowInlineButton.add(button)
                 }
 
                 i % 5 == 0 && i < 35 -> {
                     val button = InlineKeyboardButton()
-                    button.putData("$i", "$callData_clientData$clientId#$date#$hour:$i")
+                    button.putData("$i", "$callData_duration$clientId#$date#$hour:$i")
                     firstRowInlineButton.add(button)
                 }
 
                 i % 5 == 0 -> {
                     val button = InlineKeyboardButton()
-                    button.putData("$i", "$callData_clientData$clientId#$date#$hour:$i")
+                    button.putData("$i", "$callData_duration$clientId#$date#$hour:$i")
                     secondRowInlineButton.add(button)
                 }
 
                 i == 56 -> {
                     val button = InlineKeyboardButton()
-                    button.putData("00", "$callData_clientData$clientId#$date#$hour:00")
+                    button.putData("00", "$callData_duration$clientId#$date#$hour:00")
                     secondRowInlineButton.add(button)
                 }
             }
@@ -806,6 +832,72 @@ class BotMenuFunction : BotMenuInterface {
         inlineKeyboardMarkup.keyboard = rowsInline
 
         val textForMessage = text_chooseMinute
+        editMessageText.putData(stringChatId, intMessageId, textForMessage)
+        editMessageText.replyMarkup = inlineKeyboardMarkup
+        return editMessageText
+    }
+
+    // Установка времени продолжительности приема
+    fun receiveVisitDuration(stringChatId: String, intMessageId: Int, callBackData: String): EditMessageText {
+        val dataString: String = callBackData.replace(callData_duration, "")
+        val editMessageText = EditMessageText()
+
+        val inlineKeyboardMarkup = InlineKeyboardMarkup()
+        val rowsInline = ArrayList<List<InlineKeyboardButton>>()
+        val firstRowInlineButton = ArrayList<InlineKeyboardButton>()
+        val secondRowInlineButton = ArrayList<InlineKeyboardButton>()
+        val thirdRowInlineButton = ArrayList<InlineKeyboardButton>()
+        val fourthRowInlineButton = ArrayList<InlineKeyboardButton>()
+        val fifthRowInlineButton = ArrayList<InlineKeyboardButton>()
+        val sixthRowInlineButton = ArrayList<InlineKeyboardButton>()
+
+        for (i in 1 .. 30) {
+            when (i) {
+                in 1 .. 6 -> {
+                    val button = InlineKeyboardButton()
+                    button.putData("${i}0", "$callData_clientData$dataString#${i}0")
+                    firstRowInlineButton.add(button)
+                }
+
+                in 7 .. 12 -> {
+                    val button = InlineKeyboardButton()
+                    button.putData("${i}0", "$callData_clientData$dataString#${i}0")
+                    secondRowInlineButton.add(button)
+                }
+
+                in 13 .. 18 -> {
+                    val button = InlineKeyboardButton()
+                    button.putData("${i}0", "$callData_clientData$dataString#${i}0")
+                    thirdRowInlineButton.add(button)
+                }
+
+                in 19 .. 24 -> {
+                    val button = InlineKeyboardButton()
+                    button.putData("${i}0", "$callData_clientData$dataString#${i}0")
+                    fourthRowInlineButton.add(button)
+                }
+
+                in 25 .. 30 -> {
+                    val button = InlineKeyboardButton()
+                    button.putData("${i}0", "$callData_clientData$dataString#${i}0")
+                    fifthRowInlineButton.add(button)
+                }
+            }
+        }
+
+        val menuButton = InlineKeyboardButton()
+        menuButton.putData("\uD83D\uDD19  В главное меню", callData_mainMenu)
+        sixthRowInlineButton.add(menuButton)
+
+        rowsInline.add(firstRowInlineButton)
+        rowsInline.add(secondRowInlineButton)
+        rowsInline.add(thirdRowInlineButton)
+        rowsInline.add(fourthRowInlineButton)
+        rowsInline.add(fifthRowInlineButton)
+        rowsInline.add(sixthRowInlineButton)
+        inlineKeyboardMarkup.keyboard = rowsInline
+
+        val textForMessage = "Установите продолжительность приема в минутах"
         editMessageText.putData(stringChatId, intMessageId, textForMessage)
         editMessageText.replyMarkup = inlineKeyboardMarkup
         return editMessageText
@@ -845,7 +937,8 @@ class BotMenuFunction : BotMenuInterface {
         val localDate = LocalDate.now()
         clientRepository.findAll().filter { localDate.minusDays(1).toString() == it.appointmentDate &&
                 it.visitAgreement != wqSym && it.visitAgreement != qSym}.forEach {
-            it.appointmentDate = ""; it.appointmentTime = ""; it.visitAgreement = wqSym; clientRepository.save(it) }
+            it.appointmentDate = ""; it.appointmentTime = ""; it.visitDuration = "..."; it.visitAgreement = wqSym;
+            clientRepository.save(it) }
     }
 
     // Изменить данные пользователя (для администратора)
@@ -1085,17 +1178,21 @@ class BotMenuFunction : BotMenuInterface {
         return editMessageText
     }
 
-    // Меню с информацией о клиентах
+    // Меню с информацией о лимитах и клиентах специалиста
     fun receiveClientsMenu(longChatId: Long, stringChatId: String, intMessageId: Int, clientRepository: ClientDataDao,
                            userRepository: UserDao): EditMessageText {
+
+        val user = userRepository.findById(longChatId).get()
+        val userPaymentDate = LocalDate.parse(user.paymentDate)
+        val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
+        val paymentDate = formatter.format(userPaymentDate)
         val localDate = LocalDate.now()
         val clients = clientRepository.findAll().filter { it.specialistId == longChatId }
         val amount = clients.size
-        val user = userRepository.findById(longChatId).get()
 
-        var textForMessage = "$text_clientLimitFour$amount\n\n"
+        var textForMessage = "$text_clientLimitFour$amount\n\n$text_subscriptionTime$paymentDate\n"
 
-        textForMessage += if (localDate.isAfter(LocalDate.parse(user.paymentDate))){
+        textForMessage += if (localDate.isAfter(userPaymentDate)){
             if ((config_freeClientsAmount - amount) > 0){
                 "$text_clientLimitFive${config_freeClientsAmount}$text_clientLimitSix${config_freeClientsAmount - amount}" +
                 "$text_clientLimitOne${config_maxClientsAmount}$text_clientLimitTwo${config_maxClientsAmount}$text_clientLimitThree"
@@ -1379,5 +1476,6 @@ class BotMenuFunction : BotMenuInterface {
             else -> monthNotFoundText
         }
     }
+
 
 }

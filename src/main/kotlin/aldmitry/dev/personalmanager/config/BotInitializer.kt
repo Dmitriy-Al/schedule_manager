@@ -15,7 +15,7 @@ class BotInitializer(@Autowired var inputOutputCommand: InputOutputCommand){
 
     // Коннект с Telegram
     @EventListener(ContextRefreshedEvent::class)
-    fun init(){
+    fun init() {
         try{
             val telegramBotsApi = TelegramBotsApi(DefaultBotSession::class.java)
             telegramBotsApi.registerBot(inputOutputCommand)
@@ -23,6 +23,5 @@ class BotInitializer(@Autowired var inputOutputCommand: InputOutputCommand){
             val logger = LoggerFactory.getLogger("BotInitializer <init>")
             logger.error(e.message)
         }
-
     }
 }

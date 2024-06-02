@@ -2,7 +2,6 @@ package aldmitry.dev.personalmanager.service
 
 import aldmitry.dev.personalmanager.apptexts.*
 import aldmitry.dev.personalmanager.backup.BackupCreator
-import aldmitry.dev.personalmanager.config.Config
 import aldmitry.dev.personalmanager.config.*
 import aldmitry.dev.personalmanager.extendfunctions.protectedExecute
 import aldmitry.dev.personalmanager.extendfunctions.putData
@@ -31,7 +30,6 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
-import kotlin.collections.HashMap
 
 val config = Config()
 
@@ -146,6 +144,7 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
                         protectedExecute(botMenuFunction.createClientAppointment(stringChatId, startMessageId, // запись визита клиента в назначенное время
                                 updateMessageText, monthNumber, callData_clientData, clientRepository))
                     }
+
                     updateMessageText.split(" ").size == 3 -> {
                         /**
                          * 1 - id клиента по умолчанию, если клиент добавляется без регистрации через Telegram
@@ -154,6 +153,7 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
                         if (isSubscriptionExpire(longChatId)) protectedExecute(botMenuFunction.receiveSubscriptionMessage( // если лимит добавления не исчерпан, в бд добавляется новый клиент
                            startMessageId, stringChatId)) else checkDoubleOfClient(stringChatId, longChatId, updateMessageText)
                     }
+
                     !updateMessageText.contains(" ") && updateMessageText.length in 2..15 -> { // функция предоставляет список клиентов, с фамилиями, последовательность символов в которых совпадают с updateMessageText
                         protectedExecute(botMenuFunction.receiveClientBySecondName(startMessageId, stringChatId, longChatId, // поиск клиента, callData_callBackClientId - запись на приём
                                 updateMessageText, callData_callBackClientId, clientRepository))
@@ -171,8 +171,7 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
                 callData_startBot -> sendStartMessage(stringChatId, longChatId) // начало работы бота
                 callData_helpCommand -> sendHelpMessage(stringChatId, longChatId) // меню help
                 callData_deleteUser -> deleteUserData(stringChatId, longChatId) // меню удаления данных user
-                // Удаление отправленных в чат сообщений (чтобы не засорять экран чата)
-                else -> protectedExecute(DeleteMessage().putData(stringChatId, intMessageId))
+                else -> protectedExecute(DeleteMessage().putData(stringChatId, intMessageId)) // Удаление отправленных в чат сообщений (чтобы не засорять экран чата)
             }
 
             /**
@@ -204,7 +203,7 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
                     }
 
                     callBackData.contains(callData_paymentMenu) -> {
-                        receiveSubscriptionMenu(longChatId, stringChatId, intMessageId)
+                        receiveSubscriptionMenu(stringChatId, intMessageId) // receiveSubscriptionMenu(longChatId, stringChatId, intMessageId)
                     }
 
                     callBackData.contains(callData_cancelAppointment) -> {
@@ -217,6 +216,10 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
 
                     callBackData.contains(callData_clientData) -> {
                         createAppointmentMessages(longChatId, stringChatId, intMessageId, callBackData)
+                    }
+
+                    callBackData.contains(callData_duration) -> {
+                        protectedExecute(botMenuFunction.receiveVisitDuration(stringChatId, intMessageId, callBackData))
                     }
 
                     callBackData == callData_addNewClient -> {
@@ -377,6 +380,12 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
                                 intMessageId, text_findClient, callData_clientForSettingsMenu)
                         protectedExecute(editMessageText)
                         tempData[stringChatId] = input_findClientForSettings
+                    }
+
+                    callBackData.contains(callData_upDays) -> {
+                        val dataText = callBackData.replace(callData_upDays, "").split("#")
+                        protectedExecute(botMenuFunction.upSubscription(stringChatId,
+                            intMessageId, dataText[0], dataText[1], userRepository))
                     }
 
                     callBackData.contains(callData_clientForSettingsMenu) -> {
@@ -675,6 +684,26 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
                         BackupCreator().createClientListTxt(clientList, "${config_backupListDirectory}$userId.txt")
                         protectedExecute(botMenuFunction.receiveBackupList(stringChatId,
                                 "${config_backupListDirectory}$userId.txt"))
+                    }
+
+                    callBackData.contains(callData_upSubscription) -> {
+                        val userId = callBackData.replace(callData_upSubscription, "")
+                        val subscriptionDays = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
+                        val sendMessage = SendMessage(stringChatId, "$text_chooseTime$userId:")
+                        sendMessage.replyMarkup = botMenuFunction.createDataButtonSet(subscriptionDays, "$callData_upDays#$userId")
+                        protectedExecute(sendMessage)
+                    }
+
+                    callBackData.contains(callData_payMenu) -> {
+                        val paymentPassword = callBackData.replace(callData_payMenu, "")
+                        protectedExecute(botMenuFunction.receivePaymentMenu(stringChatId, intMessageId, paymentPassword))
+                        val adminId = userRepository.findAll().first { it.profession == config.adminUser }
+                        val user = userRepository.findById(longChatId).get()
+                        val sendMessage = SendMessage(adminId!!.chatId.toString(),
+                            "$text_paymentOne${user.chatId}$text_paymentTwo$paymentPassword")
+                        sendMessage.replyMarkup = botMenuFunction.receiveOneButtonMenu("Продлить подписку",
+                            "$callData_upSubscription${user.chatId}")
+                        protectedExecute(sendMessage)
                     }
                 }
 
@@ -1060,6 +1089,7 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
         val client = clientRepository.findById(clientId).get()
         client.appointmentTime = ""
         client.appointmentDate = ""
+        client.visitDuration = "..."
         clientRepository.save(client)
         val textForMessage: String
 
@@ -1088,11 +1118,13 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
         val clientId = splitDataString[0].toLong()
         val date = splitDataString[1]
         val time = splitDataString[2]
+        val duration = splitDataString[3]
         var textAddition = ""
 
         val client = clientRepository.findById(clientId).get()
         client.appointmentDate = date
         client.appointmentTime = time
+        client.visitDuration = duration
         client.visitAgreement = if (client.chatId > 1) wqSym else qSym
         clientRepository.save(client)
 
@@ -1101,14 +1133,14 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
         if (client.chatId > 1){
             textAddition = text_newClientAppointment
             val sendMessage = SendMessage(client.chatId.toString(), "$text_messageClientAppointment${user.getFullName()} " +
-                    "на ${formatter.format(LocalDate.parse(date))} в $time\n")
+                    "на ${formatter.format(LocalDate.parse(date))} в $time\n" )
             sendMessage.replyMarkup = botMenuFunction.receiveOneButtonMenu(okButton, callData_delMessage)
             protectedExecute(sendMessage)
         }
 
         val editMessageText = EditMessageText()
         val textForMessage = "\uD83D\uDD30 ${client.secondName} ${client.firstName} ${client.patronymic} записан на " +
-                "${formatter.format(LocalDate.parse(date))} в $time$textAddition"
+                "${formatter.format(LocalDate.parse(date))} в $time$text_visitDuration $duration минут.$textAddition"
         editMessageText.putData(stringChatId, intMessageId, textForMessage)
         editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  Назад в меню",
                 callData_mainMenu)
@@ -1286,7 +1318,21 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
         protectedExecute(editMessageText)
     }
 
-    // Меню оплаты подписки
+    // Меню оплаты подписки переводом
+    private fun receiveSubscriptionMenu(stringChatId: String, intMessageId: Int) {
+        val textForMessage: String = "$text_paymentTextOne$config_subscriptionPrice$text_paymentTextTwo" +
+                "$config_subscriptionDays$text_paymentTextThree$config_maxClientsAmount$text_paymentTextFour" +
+                "$config_freeClientsAmount$text_paymentTextFourAddition"
+
+        val paymentPassword = (10000 .. 99999).random()
+        val editMessageText: EditMessageText = EditMessageText().putData(stringChatId, intMessageId, textForMessage)
+        editMessageText.replyMarkup = botMenuFunction.receiveTwoButtonsMenu("\uD83D\uDD19  В главное меню",
+            callData_mainMenu, "Меню оплаты", "$callData_payMenu$paymentPassword")
+        protectedExecute(editMessageText)
+    }
+
+
+    // Меню оплаты подписки через тг
     private fun receiveSubscriptionMenu(longChatId: Long, stringChatId: String, intMessageId: Int) {
         val editMessageText: EditMessageText
         val isPayed: Boolean = LocalDate.now().isBefore(LocalDate.parse(userRepository.findById(longChatId).
@@ -1299,11 +1345,11 @@ class InputOutputCommand(@Autowired val clientRepository: ClientDataDao, @Autowi
         if (isPayed) {
             editMessageText = EditMessageText().putData(stringChatId, intMessageId, "$textForMessage$text_alreadyPayed")
             editMessageText.replyMarkup = botMenuFunction.receiveOneButtonMenu("\uD83D\uDD19  В главное меню",
-                    callData_mainMenu)
+                callData_mainMenu)
         } else {
             val payLync: String = protectedExecute(botMenuFunction.receiveInvoiceLink(stringChatId, text_receiptDescription))
             editMessageText = botMenuFunction.receivePayMenu(stringChatId, intMessageId, payLync,
-                    "$textForMessage$text_canPay")
+                "$textForMessage$text_canPay")
         }
         protectedExecute(editMessageText)
     }
@@ -1375,10 +1421,12 @@ const val input_findClientForSettings = "FIND_CLIENT_FOR_SETTINGS" // поиск
 const val callData_dayUp = "#dayup" // увеличивает количество дней до момента отправки сообщения с уведомлением клиента о приеме у специалиста
 const val callData_timeUp = "#timeup" // увеличивает время до момента отправки сообщения с уведомлением клиента о приеме у специалиста
 const val callData_zoneUp = "#zoneup" // увеличивает время часового пояса специалиста (от Мск.)
+const val callData_upDays = "#updays" // продлить подписку
 const val callData_myData = "#mydata" // меню с данными специалиста
 const val callData_dayDown = "#daydwn" // уменьшает количество дней до момента отправки сообщения с уведомлением клиента о приеме у специалиста
 const val callData_changeUser = "#usr" // изменить данные user
 const val callData_startBot = "/start" // главное меню
+const val callData_payMenu = "#paymenu" // отправка списка пациентов в чат специалистам
 const val callData_myClients = "#mycli" // меню с информацией о клиентах
 const val callData_startMenu = "#start" // главное меню
 const val callData_appointmentDay = "@" // установка дня записи клиента на прием
@@ -1388,16 +1436,18 @@ const val callData_appointmentHour = "&" // установка часа запи
 const val callData_timeDown = "#timedwn" // уменьшает время до момента отправки сообщения с уведомлением клиента о приеме у специалиста
 const val callData_registration = "#reg" // запуск процесса регистрации, ввод фамилии/ФИО
 const val callData_delMessage = "#delmes" // удаление сообщения
+const val callData_duration = "#duration" // продолжительность приема
 const val callData_allClients = "#allcli" // список всех клиентов специалиста
 const val callData_clientData = "#cldata" // callData с прикреплённой информацией для записи на приём: clientId, дата, час, минуты
-const val callData_appointmentMin = "#minute" // установка минут для записи клиента на прием
 const val callData_deleteClient = "#delcli" // удаление клиента
 const val callData_paymentMenu = "#payment" // меню оплаты абонемента
 const val callData_getBackup = "#getbackup" // получение файла со списком клиентов для отправки специалисту
 const val callData_cleanChat = "#cleanchat" // удаление всех сообщений, id которых находится в Map savedMessageId
+const val callData_upSubscription = "#upsub" // продлить подписку
 const val callData_callBackClientId = "#clid" // callData с прикреплённой информацией для записи на приём: clientId
 const val callData_backupMenu = "Backup меню" // backup меню администратора
 const val callData_deleteUser = "/deletedata" // меню удаления данных user
+const val callData_appointmentMin = "#minute" // установка минут для записи клиента на прием
 const val callData_delClientRemark = "#delrem" // удалить заметку у клиента
 const val callData_cancelAppointment = "#disapp" // отмена визита клиентом
 const val callData_messageToSupport = "#support" // сообщение в поддержку от специалиста
@@ -1448,6 +1498,7 @@ const val callData_addNewClient =  "Добавить нового клиента
 const val callData_clientBaseMenu = "Работа с базой клиентов/пациентов" // меню для работы с данными клиента
 const val callData_myAppointment = "\uD83D\uDCC5  Посмотреть мою запись" // меню для просмотра user-ом записи к специалисту
 const val callData_sendUserBackupLists = "Отправить backup пользователям" // отправка списка пациентов в чат специалистам
+
 
 // Символы для использования в системных текстах
 const val qSym = " ？"

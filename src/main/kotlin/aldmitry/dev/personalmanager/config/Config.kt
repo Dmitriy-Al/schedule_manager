@@ -13,9 +13,9 @@ import javax.xml.parsers.SAXParserFactory
 @EnableScheduling
 class Config : DefaultHandler() {
 
-    final val adminUser = "admin" // профессия специалиста, дающая права администрирования
-    final val botUsername = "Test" // имя бота
-    final val botToken = "5684975537"  // токен бота
+    final val adminUser = "" // профессия специалиста, дающая права администрирования
+    final val botUsername = "" // имя бота
+    final val botToken = "5684975537:"  // токен бота
 
     // Загрузка настроек конфигурации мз xml-файла в заданной директории settingsFileDirectory
     fun loadSettings(directory: String) {
@@ -27,7 +27,8 @@ class Config : DefaultHandler() {
 
     // Настройки конфигурации устанавливаются из xml-файла вместо настроек по умолчанию
     override fun startElement(uri: String, localName: String, qName: String, attributes: Attributes) {
-        if (qName == "config"){
+        if (qName == "config") {
+            config_payCard = attributes.getValue("payCard")
             config_payToken = attributes.getValue("payToken")
             config_backupDirectory = attributes.getValue("backupDirectory")
             config_userBackupTitle = attributes.getValue("userBackupTitle")
@@ -44,18 +45,19 @@ class Config : DefaultHandler() {
             config_subscriptionPrice = attributes.getValue("subscriptionPrice").toInt()
         }
     }
-
 }
 
+
 // Настройки конфигурации по умолчанию
+var config_payCard = "5469 5500 7590 371"
 var settingsFileDirectory = "/home/dmitry/Documents/Personal_manager/settings.xml" // путь к директории xml-файла с настройками конфигурации приложения
-var config_payToken = "" // токен платежной системы 
-var config_trialPeriod = 3L // срок (в месяцах), в течение которого бот сохраняет полный функционал без внесения абонентской платы
+var config_payToken = "381764678" // токен платежной системы
+var config_trialPeriod = 6L // срок (в месяцах), в течение которого бот сохраняет полный функционал без внесения абонентской платы
 var config_paymentBefore = 7L // срок (в днях) до истечения срока действующего абонемента, когда оплата абонемента на следующий период становится доступной
-var config_freeClientsAmount = 30 // количество клиентов, которое можно добавить без оплаты абонемента
-var config_maxClientsAmount = 500 // максимальное количество клиентов, которое можно добавить
+var config_freeClientsAmount = 50 // количество клиентов, которое можно добавить без оплаты абонемента
+var config_maxClientsAmount = 1000 // максимальное количество клиентов, которое можно добавить
 var config_subscriptionDays = 30L // срок действия абонемента (в днях)
-var config_subscriptionPrice = 100 // стоимость абонемента (в рублях)
+var config_subscriptionPrice = 50 // стоимость абонемента (в рублях)
 var config_createBackupTime = 22 // время в которое администратору отправляется backup (час Мск.)
 var config_userBackupTitle = "user_backup.xml" // имя backup-файла сервера user
 var config_clientBackupTitle = "client_backup.xml" // имя backup-файла сервера client
