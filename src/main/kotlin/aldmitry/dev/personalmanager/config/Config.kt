@@ -14,8 +14,8 @@ import javax.xml.parsers.SAXParserFactory
 class Config : DefaultHandler() {
 
     final val adminUser = "" // профессия специалиста, дающая права администрирования
-    final val botUsername = "" // имя бота
-    final val botToken = "5684975537:"  // токен бота
+    final val botUsername = "NameBot" // имя бота
+    final val botToken = "5684975537:AAHNI1ulaYG9U0ifSlOet3"  // токен бота
 
     // Загрузка настроек конфигурации мз xml-файла в заданной директории settingsFileDirectory
     fun loadSettings(directory: String) {
@@ -49,9 +49,9 @@ class Config : DefaultHandler() {
 
 
 // Настройки конфигурации по умолчанию
-var config_payCard = "5469 5500 7590 371"
+var config_payCard = "5469 5500 7590"
 var settingsFileDirectory = "/home/dmitry/Documents/Personal_manager/settings.xml" // путь к директории xml-файла с настройками конфигурации приложения
-var config_payToken = "381764678" // токен платежной системы
+var config_payToken = "381764678" //
 var config_trialPeriod = 6L // срок (в месяцах), в течение которого бот сохраняет полный функционал без внесения абонентской платы
 var config_paymentBefore = 7L // срок (в днях) до истечения срока действующего абонемента, когда оплата абонемента на следующий период становится доступной
 var config_freeClientsAmount = 50 // количество клиентов, которое можно добавить без оплаты абонемента

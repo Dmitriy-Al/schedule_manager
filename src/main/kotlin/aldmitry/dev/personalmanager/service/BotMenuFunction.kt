@@ -36,7 +36,24 @@ class BotMenuFunction : BotMenuInterface {
 
     // Список с разделами главного меню пользователя-клиента
     private val clientMenuList = listOf(callData_myAppointment, callData_regAsSpec)
-    
+
+    // Создание строки-линии из символов 🟩, длинна зависит от продолжительности приема клиента
+    private fun createTimeLine(timeLength: String): String {
+        val builder: StringBuilder = StringBuilder()
+        try {
+            val length = timeLength.toInt()
+            if (length < 30) {
+                builder.append("\uD83D\uDFE9")
+            } else {
+                repeat (length / 30) {
+                    builder.append("\uD83D\uDFE9")
+                }
+            }
+        } catch (e: NumberFormatException) {
+            builder.append("\uD83D\uDFE9")
+        }
+        return builder.toString()
+    }
 
     // Экранная клавиатура
     override fun createButtonSet(textForButton: List<String>): InlineKeyboardMarkup {
@@ -236,7 +253,8 @@ class BotMenuFunction : BotMenuInterface {
     fun receiveAdministratorSendMessage(stringChatId: String, textForStartMessage: String, saveMessageIdSize: Int,
                                         userRepository: UserDao, clientRepository: ClientDataDao): SendMessage {
         val specialists = userRepository.findAll().filter { it.profession.isNotEmpty() }
-        val textForMessage = "$textForStartMessage\uD83D\uDD30  Меню администратора.\npayToken: $config_payToken" +
+        val textForMessage = "$textForStartMessage\uD83D\uDD30  " +
+                "Меню администратора.\nНомер банковской карты: $config_payCard\npayToken: $config_payToken" +
                 "\nБесплатный период использования (мес.): $config_trialPeriod\nДосрочная оплата абонемента за (дней): " +
                 "$config_paymentBefore\nБесплатно добавляемых клиентов: ${config_freeClientsAmount}\nМаксимальное " +
                 "количество добавляемых клиентов: $config_maxClientsAmount\nСрок действия абонемента (дней): " +
@@ -278,19 +296,19 @@ class BotMenuFunction : BotMenuInterface {
 
                 i.code < 1055 -> {
                     val button = InlineKeyboardButton()
-                    button.putData("$i", callBackData + i)
+                    button.putData("$i", callBackData + i) // #findcli
                     secondRowInlineButton.add(button)
                 }
 
                 i.code < 1062 -> {
                     val button = InlineKeyboardButton()
-                    button.putData("$i", callBackData + i)
+                    button.putData("$i", callBackData + i) // #findcli
                     thirdRowInlineButton.add(button)
                 }
 
                 i.code < 1072 -> {
                     val button = InlineKeyboardButton()
-                    button.putData("$i", callBackData + i)
+                    button.putData("$i", callBackData + i) // #findcli
                     fourthRowInlineButton.add(button)
                 }
             }
@@ -897,7 +915,7 @@ class BotMenuFunction : BotMenuInterface {
         rowsInline.add(sixthRowInlineButton)
         inlineKeyboardMarkup.keyboard = rowsInline
 
-        val textForMessage = "Установите продолжительность приема в минутах"
+        val textForMessage = text_setDurationTime
         editMessageText.putData(stringChatId, intMessageId, textForMessage)
         editMessageText.replyMarkup = inlineKeyboardMarkup
         return editMessageText
@@ -936,9 +954,8 @@ class BotMenuFunction : BotMenuInterface {
     fun removeClientsAppointment(clientRepository: ClientDataDao) {
         val localDate = LocalDate.now()
         clientRepository.findAll().filter { localDate.minusDays(1).toString() == it.appointmentDate &&
-                it.visitAgreement != wqSym && it.visitAgreement != qSym}.forEach {
-            it.appointmentDate = ""; it.appointmentTime = ""; it.visitDuration = "..."; it.visitAgreement = wqSym;
-            clientRepository.save(it) }
+                it.visitAgreement != wqSym && it.visitAgreement != qSym}.forEach {it.appointmentDate = "";
+            it.appointmentTime = ""; it.visitDuration = "..."; it.visitAgreement = wqSym; clientRepository.save(it) }
     }
 
     // Изменить данные пользователя (для администратора)
@@ -1225,9 +1242,10 @@ class BotMenuFunction : BotMenuInterface {
 
         clientRepository.findAll().filter { it.specialistId == longChatId && it.appointmentDate.length == 10 &&
                 !localDate.isAfter(LocalDate.parse(it.appointmentDate)) }.sortedBy { it.appointmentDate }.asReversed()
-                .forEach { textForMessage.append( "\n" + (if (dateText == it.appointmentDate) "" else "\n") + "\uD83D\uDD39 " +
-                        "${formatter.format(LocalDate.parse(it.appointmentDate))} в " + "${it.appointmentTime}  - ${it.secondName} " +
-                        "${it.firstName.first()}"); dateText = it.appointmentDate }
+            .forEach { textForMessage.append( "\n" + (if (dateText == it.appointmentDate) "" else "\n") + "\uD83D\uDD39 " +
+                    "${formatter.format(LocalDate.parse(it.appointmentDate))} в " + "${it.appointmentTime}  - ${it.secondName} " +
+                    "${it.firstName.first()}.\n${createTimeLine(it.visitDuration)} ${it.visitDuration} мин.");
+                dateText = it.appointmentDate }
 
         val editMessageText = EditMessageText()
         editMessageText.putData(stringChatId, intMessageId, textForMessage.toString())
